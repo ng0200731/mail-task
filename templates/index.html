@@ -786,6 +786,91 @@
         const emailModalMeta = document.getElementById('email-modal-meta');
         const emailModalFrame = document.getElementById('email-modal-frame');
         let currentEmails = [];
+        let currentProvider = null;
+        const PROVIDER_LABELS = {
+            gmail: 'Gmail',
+            qq: 'QQ',
+            '163': '163.com'
+        };
+
+        function getTodayKey() {
+            const d = new Date();
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
+        function cacheEmails(provider, emails) {
+            try {
+                const key = `emails:${provider}:${getTodayKey()}`;
+                localStorage.setItem(key, JSON.stringify({ date: getTodayKey(), emails: emails || [] }));
+                if (provider) {
+                    localStorage.setItem('lastEmailProvider', provider);
+                }
+            } catch {}
+        }
+
+        function loadCachedEmails(provider) {
+            try {
+                const key = `emails:${provider}:${getTodayKey()}`;
+                const raw = localStorage.getItem(key);
+                if (!raw) return null;
+                const parsed = JSON.parse(raw);
+                if (parsed?.date === getTodayKey() && Array.isArray(parsed.emails)) {
+                    return parsed.emails;
+                }
+            } catch {}
+            return null;
+        }
+
+        function updateContentTitle(provider, cached = false) {
+            const titleEl = document.getElementById('content-title');
+            if (!titleEl) return;
+            if (provider && PROVIDER_LABELS[provider]) {
+                titleEl.textContent = `Receive Mail (${PROVIDER_LABELS[provider]}${cached ? ' - Cached' : ''})`;
+            } else {
+                titleEl.textContent = 'Receive Mail';
+            }
+        }
+
+        function renderCachedEmailsFor(provider) {
+            const cached = loadCachedEmails(provider);
+            if (cached && Array.isArray(cached)) {
+                displayEmails(cached, { provider, cached: true });
+                return true;
+            }
+            return false;
+        }
+
+        function loadCachedEmailsOnStartup() {
+            const emailList = document.getElementById('email-list');
+            const candidates = [];
+            const lastProvider = localStorage.getItem('lastEmailProvider');
+            if (lastProvider) {
+                candidates.push(lastProvider);
+            }
+            ['gmail', 'qq', '163'].forEach((provider) => {
+                if (!candidates.includes(provider)) {
+                    candidates.push(provider);
+                }
+            });
+
+            for (const provider of candidates) {
+                if (renderCachedEmailsFor(provider)) {
+                    currentProvider = provider;
+                    return;
+                }
+            }
+
+            if (emailList) {
+                currentEmails = [];
+                emailList.innerHTML = '<div class="loading">No cached emails for today. Click a fetch button to load the latest messages.</div>';
+                emailList.dataset.cached = 'false';
+            }
+            currentProvider = null;
+            updateContentTitle(null);
+        }
 
         // Initialize Profile 1 with default values from configuration
         function initializeProfile1() {
@@ -1099,6 +1184,7 @@
             }
             showProfileList();
             updateComposeDefaults();
+            loadCachedEmailsOnStartup();
             document.addEventListener('keydown', (evt) => {
                 if (evt.key === 'Escape' && !emailModal.classList.contains('hidden')) {
                     closeEmailModal();
@@ -1113,7 +1199,14 @@
             document.getElementById('settings-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Receive Mail';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+            const emailList = document.getElementById('email-list');
+            if (currentProvider && emailList) {
+                const cached = emailList.dataset && emailList.dataset.cached === 'true';
+                updateContentTitle(currentProvider, cached);
+            }
         }
 
         function showSend() {
@@ -1123,7 +1216,9 @@
             document.getElementById('settings-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Send Email';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
         }
 
         function showTask() {
@@ -1133,7 +1228,9 @@
             document.getElementById('settings-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Task';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
         }
 
         function showSettings() {
@@ -1143,7 +1240,9 @@
             document.getElementById('send-mail-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Settings';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
             showProfileList();
         }
 
@@ -1188,6 +1287,12 @@
             const emailList = document.getElementById('email-list');
             emailList.innerHTML = '<div class="loading">Loading Gmail emails...</div>';
             
+            // Show cached emails immediately if available
+            const cached = loadCachedEmails('gmail');
+            if (cached && Array.isArray(cached)) {
+                displayEmails(cached, { provider: 'gmail', cached: true });
+            }
+
             const profile = getCurrentProfile();
             const gmail = profile.gmail || {};
             const requestData = {
@@ -1212,7 +1317,9 @@
                     if (data.error) {
                         emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
                     } else {
-                        displayEmails(data.emails || []);
+                        const list = data.emails || [];
+                        cacheEmails('gmail', list);
+                        displayEmails(list, { provider: 'gmail' });
                     }
                 })
                 .catch(error => {
@@ -1231,6 +1338,10 @@
 
             const emailList = document.getElementById('email-list');
             emailList.innerHTML = '<div class="loading">Loading QQ emails...</div>';
+            const cached = loadCachedEmails('qq');
+            if (cached && Array.isArray(cached)) {
+                displayEmails(cached, { provider: 'qq', cached: true });
+            }
             
             fetch('/api/fetch-qq', {
                 method: 'POST',
@@ -1252,7 +1363,9 @@
                     if (data.error) {
                         emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
                     } else {
-                        displayEmails(data.emails || []);
+                        const list = data.emails || [];
+                        cacheEmails('qq', list);
+                        displayEmails(list, { provider: 'qq' });
                     }
                 })
                 .catch(error => {
@@ -1263,6 +1376,10 @@
         function fetch163Emails() {
             const emailList = document.getElementById('email-list');
             emailList.innerHTML = '<div class="loading">Loading 163.com emails...</div>';
+            const cached = loadCachedEmails('163');
+            if (cached && Array.isArray(cached)) {
+                displayEmails(cached, { provider: '163', cached: true });
+            }
             
             const profile = getCurrentProfile();
             const email163 = profile.email163 || {};
@@ -1288,7 +1405,9 @@
                     if (data.error) {
                         emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
                     } else {
-                        displayEmails(data.emails || []);
+                        const list = data.emails || [];
+                        cacheEmails('163', list);
+                        displayEmails(list, { provider: '163' });
                     }
                 })
                 .catch(error => {
@@ -1407,9 +1526,19 @@
                 });
         }
 
-        function displayEmails(emails) {
+        function displayEmails(emails, options = {}) {
             const emailList = document.getElementById('email-list');
             currentEmails = Array.isArray(emails) ? emails : [];
+            const provider = options.provider || currentProvider;
+            const isCached = !!options.cached;
+            if (provider) {
+                currentProvider = provider;
+                updateContentTitle(provider, isCached);
+            }
+            if (!emailList) {
+                return;
+            }
+            emailList.dataset.cached = isCached ? 'true' : 'false';
 
             if (currentEmails.length === 0) {
                 emailList.innerHTML = '<div class="loading">No emails found for today</div>';

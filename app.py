@@ -3,13 +3,13 @@ import imaplib
 import email
 from email.header import decode_header
 from email.mime.text import MIMEText
-from datetime import datetime
+from datetime import datetime, date
 import ssl
 import smtplib
 import re
 
 app = Flask(__name__)
-app.config['VERSION'] = '1.0.10'
+app.config['VERSION'] = '1.0.12'
 
 # Default email configurations (can be overridden via settings)
 GMAIL_CONFIG = {
@@ -154,6 +154,8 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
     """Fetch emails from IMAP server"""
     emails = []
     today = datetime.now().date()
+    def _imap_date(d: date) -> str:
+        return d.strftime('%d-%b-%Y')
     try:
         # Create SSL context
         context = ssl.create_default_context()
@@ -169,8 +171,10 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
         mail.login(username, password)
         mail.select('INBOX')
         
-        # Search for all emails
-        status, messages = mail.search(None, 'ALL')
+        # Search for today's emails on the server side to reduce bandwidth
+        # Use SINCE today and (optionally) BEFORE tomorrow for stricter bounds
+        since_clause = f'(SINCE { _imap_date(today) })'
+        status, messages = mail.search(None, since_clause)
         email_ids = messages[0].split()
         
         # Get the most recent emails (limit)

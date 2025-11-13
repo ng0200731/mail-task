@@ -122,6 +122,12 @@
             font-weight: bold;
             color: #000000;
         }
+        .email-sequence-inline {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: normal;
+            margin-left: 10px;
+        }
 
         .email-date {
             font-family: Arial, sans-serif;
@@ -801,10 +807,56 @@
             return `${yyyy}-${mm}-${dd}`;
         }
 
+        function extractEmailAddress(rawFrom) {
+            if (!rawFrom) return '';
+            const match = rawFrom.match(/<([^>]+)>/);
+            const address = match ? match[1] : rawFrom;
+            return (address || '').trim().toLowerCase();
+        }
+
+        function computeSequence(email) {
+            const todayKey = getTodayKey().replace(/-/g, '');
+            const rawDate = (email?.date || '').slice(0, 10).replace(/-/g, '');
+            const sequenceDate = /^\d{8}$/.test(rawDate) ? rawDate : todayKey;
+
+            const address = extractEmailAddress(email?.from || '');
+            let localPart = '';
+            let domainPart = '';
+            if (address && address.includes('@')) {
+                const parts = address.split('@');
+                localPart = parts[0] || '';
+                domainPart = parts[1] || '';
+            } else {
+                localPart = address;
+            }
+
+            const letters = (localPart.match(/[a-z]/gi) || []).map(ch => ch.toLowerCase());
+            let prefix = letters.slice(0, 2).join('');
+            if (prefix.length === 1) {
+                prefix += 'x';
+            } else if (prefix.length === 0) {
+                prefix = 'xx';
+            }
+
+            const firstDomainLabel = (domainPart.split('.')[0] || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+            const domainLabel = firstDomainLabel || 'domain';
+
+            return `${sequenceDate}_${prefix}_${domainLabel}`;
+        }
+
+        function ensureEmailSequence(email) {
+            if (!email) return email;
+            if (!email.sequence) {
+                email.sequence = computeSequence(email);
+            }
+            return email;
+        }
+
         function cacheEmails(provider, emails) {
             try {
                 const key = `emails:${provider}:${getTodayKey()}`;
-                localStorage.setItem(key, JSON.stringify({ date: getTodayKey(), emails: emails || [] }));
+                const enriched = (emails || []).map(item => ensureEmailSequence({ ...item }));
+                localStorage.setItem(key, JSON.stringify({ date: getTodayKey(), emails: enriched }));
                 if (provider) {
                     localStorage.setItem('lastEmailProvider', provider);
                 }
@@ -818,7 +870,7 @@
                 if (!raw) return null;
                 const parsed = JSON.parse(raw);
                 if (parsed?.date === getTodayKey() && Array.isArray(parsed.emails)) {
-                    return parsed.emails;
+                    return parsed.emails.map(item => ensureEmailSequence(item));
                 }
             } catch {}
             return null;
@@ -1317,7 +1369,7 @@
                     if (data.error) {
                         emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
                     } else {
-                        const list = data.emails || [];
+                        const list = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
                         cacheEmails('gmail', list);
                         displayEmails(list, { provider: 'gmail' });
                     }
@@ -1363,7 +1415,7 @@
                     if (data.error) {
                         emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
                     } else {
-                        const list = data.emails || [];
+                        const list = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
                         cacheEmails('qq', list);
                         displayEmails(list, { provider: 'qq' });
                     }
@@ -1405,7 +1457,7 @@
                     if (data.error) {
                         emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
                     } else {
-                        const list = data.emails || [];
+                        const list = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
                         cacheEmails('163', list);
                         displayEmails(list, { provider: '163' });
                     }
@@ -1528,7 +1580,7 @@
 
         function displayEmails(emails, options = {}) {
             const emailList = document.getElementById('email-list');
-            currentEmails = Array.isArray(emails) ? emails : [];
+            currentEmails = Array.isArray(emails) ? emails.map(email => ensureEmailSequence({ ...email })) : [];
             const provider = options.provider || currentProvider;
             const isCached = !!options.cached;
             if (provider) {
@@ -1548,7 +1600,10 @@
             emailList.innerHTML = currentEmails.map((email, index) => `
                 <div class="email-item" data-index="${index}">
                     <div class="email-header">
-                        <div class="email-subject">${escapeHtml(email.subject || 'No Subject')}</div>
+                        <div class="email-subject">
+                            ${escapeHtml(email.subject || 'No Subject')}
+                            ${email.sequence ? `<span class="email-sequence-inline">${escapeHtml(email.sequence)}</span>` : ''}
+                        </div>
                         <div class="email-date">${escapeHtml(email.date || '')}</div>
                     </div>
                     <div class="email-from">From: ${escapeHtml(email.from || '')}</div>

@@ -4,12 +4,13 @@ import email
 from email.header import decode_header
 from email.mime.text import MIMEText
 from datetime import datetime, date
+from typing import Optional
 import ssl
 import smtplib
 import re
 
 app = Flask(__name__)
-app.config['VERSION'] = '1.0.12'
+app.config['VERSION'] = '1.0.15'
 
 # Default email configurations (can be overridden via settings)
 GMAIL_CONFIG = {
@@ -149,6 +150,35 @@ def send_email_with_configs(configs, subject, body, recipients, is_html=False, s
     return {'success': False, 'errors': attempts}
 
 
+def build_sequence_code(from_address: str, email_date: Optional[datetime] = None) -> str:
+    """Construct a sequence code YYYYMMDD_<two letters before @>_<domain label>."""
+    sequence_date = (email_date or datetime.now()).strftime('%Y%m%d')
+    parsed_email = email.utils.parseaddr(from_address)[1].lower() if from_address else ''
+    local_part = ''
+    domain_part = ''
+
+    if parsed_email and '@' in parsed_email:
+        local_part, domain_part = parsed_email.split('@', 1)
+    elif parsed_email:
+        local_part = parsed_email
+
+    letters = [ch for ch in local_part if ch.isalpha()]
+    if len(letters) >= 2:
+        prefix = ''.join(letters[:2]).lower()
+    elif len(letters) == 1:
+        prefix = letters[0].lower() + 'x'
+    else:
+        prefix = 'xx'
+
+    domain_label = ''
+    if domain_part:
+        first_label = domain_part.split('.')[0]
+        domain_label = ''.join(ch for ch in first_label if ch.isalnum()).lower()
+    if not domain_label:
+        domain_label = 'domain'
+
+    return f'{sequence_date}_{prefix}_{domain_label}'
+
 
 def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=False, limit=50):
     """Fetch emails from IMAP server"""
@@ -245,6 +275,7 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
 
                 preview_source = (body_plain or strip_html_tags(body_html) or '').strip()
                 preview = preview_source[:500] + '...' if len(preview_source) > 500 else preview_source
+                sequence_code = build_sequence_code(from_addr, date_obj)
 
                 emails.append({
                     'id': email_id.decode(),
@@ -254,7 +285,8 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                     'date': date_formatted,
                     'preview': preview,
                     'plain_body': body_plain,
-                    'html_body': body_html
+                    'html_body': body_html,
+                    'sequence': sequence_code
                 })
             except Exception as e:
                 print(f"Error processing email {email_id}: {str(e)}")

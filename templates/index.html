@@ -492,6 +492,17 @@
             background-color: #ffffff;
         }
 
+        .task-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .task-row .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
         .email-compose {
             border: 1px solid #000000;
             padding: 20px;
@@ -886,13 +897,19 @@
                 <button class="modal-close" onclick="closeTaskModal()">Close</button>
             </div>
             <div class="task-modal-body">
-                <div class="form-group">
-                    <label for="task-customer">Selected Customer</label>
-                    <input type="text" id="task-customer" readonly>
-                </div>
-                <div class="form-group">
-                    <label for="task-email">Email</label>
-                    <input type="text" id="task-email" readonly>
+                <div class="task-row">
+                    <div class="form-group">
+                        <label for="task-sequence">Sequence</label>
+                        <input type="text" id="task-sequence" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-customer">Selected Customer</label>
+                        <input type="text" id="task-customer" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-email">Email</label>
+                        <input type="text" id="task-email" readonly>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="task-catalogue">Catalogue</label>
@@ -920,6 +937,7 @@
         const taskModal = document.getElementById('task-modal');
         const taskCustomerInput = document.getElementById('task-customer');
         const taskEmailInput = document.getElementById('task-email');
+        const taskSequenceInput = document.getElementById('task-sequence');
         const taskCatalogueSelect = document.getElementById('task-catalogue');
         const taskNotesTextarea = document.getElementById('task-notes');
         const customerStatusDiv = document.getElementById('customer-status');
@@ -1888,6 +1906,7 @@
             }
 
             taskEmailInput.value = extractEmailAddress(email.from || '');
+            taskSequenceInput.value = email.sequence || 'N/A';
             taskCatalogueSelect.value = 'search';
             taskNotesTextarea.value = '';
 

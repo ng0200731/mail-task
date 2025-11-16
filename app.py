@@ -1,19 +1,27 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, session, url_for
 import imaplib
 import email
 from email.header import decode_header
 from email.mime.text import MIMEText
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional
 import ssl
 import smtplib
 import re
 import os
+import json
+import base64
 from pathlib import Path
 import sqlite3
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 app = Flask(__name__)
-app.config['VERSION'] = '1.0.27'
+app.config['VERSION'] = '1.0.42'
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Default email configurations (can be overridden via settings)
 GMAIL_CONFIG = {
@@ -70,6 +78,15 @@ SMTP_BACKUP_CONFIG = {
 DEFAULT_SMTP_CONFIGS = [SMTP_PRIMARY_CONFIG, SMTP_BACKUP_CONFIG]
 CUSTOMER_DB_PATH = Path(__file__).resolve().parent / 'mailtask.db'
 
+# Gmail API OAuth 2.0 Configuration
+# Users need to set these in Settings or environment variables
+GMAIL_OAUTH_CONFIG = {
+    'client_id': os.environ.get('GMAIL_CLIENT_ID', ''),
+    'client_secret': os.environ.get('GMAIL_CLIENT_SECRET', ''),
+    'redirect_uri': os.environ.get('GMAIL_REDIRECT_URI', 'http://localhost:5000/oauth2callback'),
+    'scopes': ['https://www.googleapis.com/auth/gmail.readonly']
+}
+
 
 def get_db_connection():
     connection = sqlite3.connect(str(CUSTOMER_DB_PATH))
@@ -104,9 +121,45 @@ def initialize_database():
                 plain_body TEXT,
                 html_body TEXT,
                 sequence TEXT,
+                attachments TEXT,
                 fetched_at TEXT DEFAULT (datetime('now')),
                 UNIQUE(provider, email_uid)
             )
+        """)
+        cursor.execute("PRAGMA table_info(emails)")
+        email_columns = {row['name'] for row in cursor.fetchall()}
+        if 'attachments' not in email_columns:
+            cursor.execute("ALTER TABLE emails ADD COLUMN attachments TEXT")
+        
+        # OAuth tokens table for Gmail API
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS oauth_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                provider TEXT NOT NULL UNIQUE,
+                token TEXT,
+                refresh_token TEXT,
+                token_uri TEXT,
+                client_id TEXT,
+                client_secret TEXT,
+                scopes TEXT,
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        # OAuth states table for state parameter validation
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS oauth_states (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state TEXT NOT NULL UNIQUE,
+                client_id TEXT,
+                client_secret TEXT,
+                redirect_uri TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        # Clean up old states (older than 10 minutes)
+        cursor.execute("""
+            DELETE FROM oauth_states 
+            WHERE datetime(created_at) < datetime('now', '-10 minutes')
         """)
         connection.commit()
     finally:
@@ -172,6 +225,11 @@ def save_emails(provider: str, emails: list[dict]):
         email_uid = str(email.get('id') or email.get('email_uid') or '')
         if not email_uid:
             continue
+        attachments = email.get('attachments') or []
+        try:
+            attachments_json = json.dumps(attachments)
+        except (TypeError, ValueError):
+            attachments_json = '[]'
         rows.append((
             provider,
             email_uid,
@@ -183,6 +241,7 @@ def save_emails(provider: str, emails: list[dict]):
             email.get('plain_body'),
             email.get('html_body'),
             email.get('sequence'),
+            attachments_json,
             now_iso
         ))
     if not rows:
@@ -202,8 +261,9 @@ def save_emails(provider: str, emails: list[dict]):
             plain_body,
             html_body,
             sequence,
+            attachments,
             fetched_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(provider, email_uid) DO UPDATE SET
             subject = excluded.subject,
             from_addr = excluded.from_addr,
@@ -213,6 +273,7 @@ def save_emails(provider: str, emails: list[dict]):
             plain_body = excluded.plain_body,
             html_body = excluded.html_body,
             sequence = excluded.sequence,
+            attachments = excluded.attachments,
             fetched_at = excluded.fetched_at
     """, rows)
     connection.commit()
@@ -303,6 +364,240 @@ def send_email_with_configs(configs, subject, body, recipients, is_html=False, s
     return {'success': False, 'errors': attempts}
 
 
+def save_oauth_token(provider: str, creds: Credentials):
+    """Save OAuth token to database"""
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    token_dict = {
+        'token': creds.token,
+        'refresh_token': creds.refresh_token,
+        'token_uri': creds.token_uri,
+        'client_id': creds.client_id,
+        'client_secret': creds.client_secret,
+        'scopes': json.dumps(creds.scopes) if creds.scopes else '[]'
+    }
+    cursor.execute("""
+        INSERT INTO oauth_tokens (provider, token, refresh_token, token_uri, client_id, client_secret, scopes, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(provider) DO UPDATE SET
+            token = excluded.token,
+            refresh_token = excluded.refresh_token,
+            token_uri = excluded.token_uri,
+            client_id = excluded.client_id,
+            client_secret = excluded.client_secret,
+            scopes = excluded.scopes,
+            updated_at = datetime('now')
+    """, (provider, token_dict['token'], token_dict['refresh_token'], token_dict['token_uri'],
+          token_dict['client_id'], token_dict['client_secret'], token_dict['scopes']))
+    connection.commit()
+    cursor.close()
+    connection.close()
+
+
+def load_oauth_token(provider: str) -> Optional[Credentials]:
+    """Load OAuth token from database"""
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM oauth_tokens WHERE provider = ?", (provider,))
+    row = cursor.fetchone()
+    cursor.close()
+    connection.close()
+    
+    if not row:
+        return None
+    
+    try:
+        scopes = json.loads(row['scopes']) if row['scopes'] else []
+        creds = Credentials(
+            token=row['token'],
+            refresh_token=row['refresh_token'],
+            token_uri=row['token_uri'] or 'https://oauth2.googleapis.com/token',
+            client_id=row['client_id'],
+            client_secret=row['client_secret'],
+            scopes=scopes
+        )
+        
+        # Refresh token if expired
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            save_oauth_token(provider, creds)
+        
+        return creds
+    except Exception as e:
+        print(f"Error loading OAuth token: {e}")
+        return None
+
+
+def fetch_gmail_api(limit=50, days_back=1):
+    """Fetch emails from Gmail using Gmail API"""
+    emails = []
+    today = datetime.now().date()
+    lookback_days = max(0, days_back)
+    allowed_dates = {today - timedelta(days=offset) for offset in range(lookback_days + 1)}
+    
+    creds = load_oauth_token('gmail')
+    if not creds:
+        return {'error': 'Gmail OAuth not configured. Please authenticate first.'}
+    
+    try:
+        service = build('gmail', 'v1', credentials=creds)
+        
+        # Calculate date range for query
+        oldest_date = min(allowed_dates)
+        query = f'after:{oldest_date.strftime("%Y/%m/%d")}'
+        
+        # List messages
+        results = service.users().messages().list(
+            userId='me',
+            q=query,
+            maxResults=min(limit, 500)
+        ).execute()
+        
+        messages = results.get('messages', [])
+        
+        for msg_item in messages[:limit]:
+            try:
+                msg = service.users().messages().get(
+                    userId='me',
+                    id=msg_item['id'],
+                    format='full'
+                ).execute()
+                
+                payload = msg['payload']
+                headers = payload.get('headers', [])
+                
+                # Extract headers
+                subject = next((h['value'] for h in headers if h['name'] == 'Subject'), 'No Subject')
+                from_addr = next((h['value'] for h in headers if h['name'] == 'From'), '')
+                to_addr = next((h['value'] for h in headers if h['name'] == 'To'), '')
+                date_str = next((h['value'] for h in headers if h['name'] == 'Date'), '')
+                
+                # Parse date
+                date_obj = None
+                date_formatted = date_str
+                try:
+                    parsed_dt = email.utils.parsedate_to_datetime(date_str)
+                    if parsed_dt:
+                        if parsed_dt.tzinfo is not None:
+                            parsed_dt = parsed_dt.astimezone().replace(tzinfo=None)
+                        date_obj = parsed_dt
+                        date_formatted = date_obj.strftime('%Y-%m-%d %H:%M:%S')
+                except Exception:
+                    pass
+                
+                if not date_obj or date_obj.date() not in allowed_dates:
+                    continue
+                
+                # Extract body and attachments
+                body_plain = ''
+                body_html = ''
+                attachments = []
+                
+                def extract_parts(parts):
+                    nonlocal body_plain, body_html, attachments
+                    for part in parts:
+                        mime_type = part.get('mimeType', '')
+                        filename = part.get('filename', '')
+                        body_data = part.get('body', {})
+                        attachment_id = body_data.get('attachmentId')
+                        
+                        # Check if it's an attachment
+                        if attachment_id:
+                            try:
+                                att_data = service.users().messages().attachments().get(
+                                    userId='me',
+                                    messageId=msg_item['id'],
+                                    id=attachment_id
+                                ).execute()
+                                
+                                # Gmail API returns base64url encoded data
+                                file_data = base64.urlsafe_b64decode(att_data['data'])
+                                
+                                attachments.append({
+                                    'filename': filename or f'attachment_{len(attachments) + 1}',
+                                    'content_type': mime_type or 'application/octet-stream',
+                                    'size': len(file_data),
+                                    'data': base64.b64encode(file_data).decode('ascii')
+                                })
+                            except Exception as att_exc:
+                                print(f"Error fetching attachment: {att_exc}")
+                                continue
+                        elif filename and mime_type not in ['text/plain', 'text/html']:
+                            # Inline attachment without attachmentId - try to get from body data
+                            data = body_data.get('data', '')
+                            if data:
+                                try:
+                                    file_data = base64.urlsafe_b64decode(data)
+                                    attachments.append({
+                                        'filename': filename,
+                                        'content_type': mime_type or 'application/octet-stream',
+                                        'size': len(file_data),
+                                        'data': base64.b64encode(file_data).decode('ascii')
+                                    })
+                                except Exception:
+                                    pass
+                        else:
+                            # Extract body text
+                            data = body_data.get('data', '')
+                            if data:
+                                try:
+                                    decoded = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
+                                    if mime_type == 'text/plain' and not body_plain:
+                                        body_plain = decoded
+                                    elif mime_type == 'text/html' and not body_html:
+                                        body_html = decoded
+                                except Exception:
+                                    pass
+                        
+                        # Recursively process nested parts
+                        if 'parts' in part:
+                            extract_parts(part['parts'])
+                
+                # Process payload
+                if 'parts' in payload:
+                    extract_parts(payload['parts'])
+                else:
+                    # Single part message
+                    mime_type = payload.get('mimeType', '')
+                    body_data = payload.get('body', {})
+                    data = body_data.get('data', '')
+                    if data:
+                        try:
+                            decoded = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
+                            if mime_type == 'text/html':
+                                body_html = decoded
+                            else:
+                                body_plain = decoded
+                        except Exception:
+                            pass
+                
+                preview_source = (body_plain or strip_html_tags(body_html) or '').strip()
+                preview = preview_source[:500] + '...' if len(preview_source) > 500 else preview_source
+                sequence_code = build_sequence_code(from_addr, date_obj)
+                
+                emails.append({
+                    'id': msg_item['id'],
+                    'subject': subject,
+                    'from': from_addr,
+                    'to': to_addr,
+                    'date': date_formatted,
+                    'preview': preview,
+                    'plain_body': body_plain,
+                    'html_body': body_html,
+                    'sequence': sequence_code,
+                    'attachments': attachments
+                })
+            except Exception as e:
+                print(f"Error processing email {msg_item.get('id', 'unknown')}: {str(e)}")
+                continue
+        
+        return {'emails': emails, 'count': len(emails)}
+    except HttpError as e:
+        return {'error': f'Gmail API error: {str(e)}'}
+    except Exception as e:
+        return {'error': f'Error fetching Gmail: {str(e)}'}
+
+
 def build_sequence_code(from_address: str, email_date: Optional[datetime] = None) -> str:
     """Construct a sequence code YYYYMMDD_<two letters before @>_<domain label>."""
     sequence_date = (email_date or datetime.now()).strftime('%Y%m%d')
@@ -333,10 +628,13 @@ def build_sequence_code(from_address: str, email_date: Optional[datetime] = None
     return f'{sequence_date}_{prefix}_{domain_label}'
 
 
-def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=False, limit=50):
+def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=False, limit=50, days_back=0):
     """Fetch emails from IMAP server"""
     emails = []
     today = datetime.now().date()
+    lookback_days = max(0, days_back)
+    allowed_dates = {today - timedelta(days=offset) for offset in range(lookback_days + 1)}
+
     def _imap_date(d: date) -> str:
         return d.strftime('%d-%b-%Y')
     try:
@@ -354,13 +652,17 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
         mail.login(username, password)
         mail.select('INBOX')
         
-        # Search for today's emails on the server side to reduce bandwidth
-        # Use SINCE today and (optionally) BEFORE tomorrow for stricter bounds
-        since_clause = f'(SINCE { _imap_date(today) })'
+        # Search for recent emails - fetch all emails in date range (with and without attachments)
+        oldest_date = min(allowed_dates)
+        since_clause = f'(SINCE { _imap_date(oldest_date) })'
         status, messages = mail.search(None, since_clause)
-        email_ids = messages[0].split()
+        email_ids = []
+        if status == 'OK' and messages and len(messages) > 0:
+            email_ids = [seq_id for seq_id in messages[0].split() if seq_id and seq_id.strip()]
         
         # Get the most recent emails (limit)
+        if email_ids:
+            email_ids = sorted(email_ids, key=lambda eid: int(eid))
         email_ids = email_ids[-limit:] if len(email_ids) > limit else email_ids
         
         for email_id in reversed(email_ids):
@@ -391,37 +693,86 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                 except Exception:
                     pass
 
-                if not date_obj or date_obj.date() != today:
+                if not date_obj or date_obj.date() not in allowed_dates:
                     continue
 
-                # Get email body (plain and html)
+                # Get email body (plain and html) and attachments
                 body_plain = ''
                 body_html = ''
+                attachments = []
 
                 if msg.is_multipart():
                     for part in msg.walk():
                         content_type = part.get_content_type()
-                        content_disposition = str(part.get("Content-Disposition"))
+                        content_disposition = str(part.get("Content-Disposition") or "").lower()
+                        filename = part.get_filename()
 
-                        if content_type == "text/plain" and "attachment" not in content_disposition and not body_plain:
+                        # More thorough attachment detection
+                        is_attachment = (
+                            'attachment' in content_disposition or
+                            bool(filename) or
+                            (content_type not in ['text/plain', 'text/html', 'multipart/alternative', 'multipart/related', 'multipart/mixed'] and 
+                             'inline' not in content_disposition)
+                        )
+
+                        # Only extract body from non-attachment text parts
+                        if not is_attachment:
+                            if content_type == "text/plain" and not body_plain:
+                                try:
+                                    payload = part.get_payload(decode=True)
+                                    if payload:
+                                        body_plain = payload.decode('utf-8', errors='ignore')
+                                except Exception:
+                                    pass
+                            elif content_type == "text/html" and not body_html:
+                                try:
+                                    payload = part.get_payload(decode=True)
+                                    if payload:
+                                        body_html = payload.decode('utf-8', errors='ignore')
+                                except Exception:
+                                    pass
+
+                        # Extract attachments
+                        if is_attachment:
                             try:
-                                body_plain = part.get_payload(decode=True).decode('utf-8', errors='ignore')
-                            except Exception:
-                                body_plain = ''
-                        elif content_type == "text/html" and "attachment" not in content_disposition and not body_html:
-                            try:
-                                body_html = part.get_payload(decode=True).decode('utf-8', errors='ignore')
-                            except Exception:
-                                body_html = ''
+                                payload = part.get_payload(decode=True)
+                                if payload is None:
+                                    payload = b''
+                                elif not isinstance(payload, bytes):
+                                    payload = str(payload).encode('utf-8')
+                                
+                                decoded_filename = decode_mime_words(filename) if filename else f'attachment_{len(attachments) + 1}'
+                                
+                                # Skip empty attachments
+                                if len(payload) > 0:
+                                    attachments.append({
+                                        'filename': decoded_filename,
+                                        'content_type': content_type or 'application/octet-stream',
+                                        'size': len(payload),
+                                        'data': base64.b64encode(payload).decode('ascii')
+                                    })
+                            except Exception as att_exc:
+                                print(f"Error extracting attachment: {att_exc}")
+                                continue
                 else:
                     content_type = msg.get_content_type()
+                    filename = msg.get_filename()
+                    is_attachment = bool(filename)
                     try:
                         payload = msg.get_payload(decode=True)
                         decoded = payload.decode('utf-8', errors='ignore') if isinstance(payload, bytes) else str(payload)
                     except Exception:
+                        payload = b''
                         decoded = str(msg.get_payload())
 
-                    if content_type == "text/html":
+                    if is_attachment:
+                        attachments.append({
+                            'filename': decode_mime_words(filename) if filename else 'attachment',
+                            'content_type': content_type,
+                            'size': len(payload or b''),
+                            'data': base64.b64encode(payload or b'').decode('ascii')
+                        })
+                    elif content_type == "text/html":
                         body_html = decoded
                     else:
                         body_plain = decoded
@@ -429,7 +780,7 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                 preview_source = (body_plain or strip_html_tags(body_html) or '').strip()
                 preview = preview_source[:500] + '...' if len(preview_source) > 500 else preview_source
                 sequence_code = build_sequence_code(from_addr, date_obj)
-
+                
                 emails.append({
                     'id': email_id.decode(),
                     'subject': subject,
@@ -439,7 +790,8 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                     'preview': preview,
                     'plain_body': body_plain,
                     'html_body': body_html,
-                    'sequence': sequence_code
+                    'sequence': sequence_code,
+                    'attachments': attachments
                 })
             except Exception as e:
                 print(f"Error processing email {email_id}: {str(e)}")
@@ -460,35 +812,236 @@ def index():
     return render_template('index.html', version=app.config['VERSION'])
 
 
+@app.route('/api/gmail-auth', methods=['GET'])
+def gmail_auth():
+    """Start Gmail OAuth flow"""
+    data = request.args
+    client_id = (data.get('client_id') or GMAIL_OAUTH_CONFIG.get('client_id') or '').strip()
+    client_secret = (data.get('client_secret') or GMAIL_OAUTH_CONFIG.get('client_secret') or '').strip()
+    redirect_uri = (data.get('redirect_uri') or GMAIL_OAUTH_CONFIG.get('redirect_uri') or 'http://localhost:5000/oauth2callback').strip()
+    
+    if not client_id or not client_secret:
+        return jsonify({'error': 'Gmail OAuth client_id and client_secret are required. Please enter them in the Settings page.'}), 400
+    
+    # Validate Client ID format
+    if not client_id.endswith('.apps.googleusercontent.com'):
+        return jsonify({'error': f'Invalid Client ID format. Should end with .apps.googleusercontent.com. Got: {client_id[:50]}...'}), 400
+    
+    # Validate Client Secret format
+    if not client_secret.startswith('GOCSPX-'):
+        return jsonify({'error': f'Invalid Client Secret format. Should start with GOCSPX-. Please check your Google Cloud Console.'}), 400
+    
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [redirect_uri]
+                }
+            },
+            scopes=GMAIL_OAUTH_CONFIG['scopes'],
+            redirect_uri=redirect_uri
+        )
+        
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'
+        )
+        
+        # Store state in both session and database for reliability
+        session['oauth_state'] = state
+        session['oauth_client_id'] = client_id
+        session['oauth_client_secret'] = client_secret
+        session['oauth_redirect_uri'] = redirect_uri
+        
+        # Also store in database as backup (in case session is lost)
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO oauth_states (state, client_id, client_secret, redirect_uri, created_at)
+                VALUES (?, ?, ?, ?, datetime('now'))
+            """, (state, client_id, client_secret, redirect_uri))
+            connection.commit()
+            cursor.close()
+            connection.close()
+        except Exception as e:
+            print(f"Warning: Could not store OAuth state in database: {e}")
+        
+        return jsonify({'auth_url': authorization_url})
+    except Exception as e:
+        error_msg = str(e)
+        # Provide more helpful error messages
+        if 'invalid_client' in error_msg.lower():
+            return jsonify({
+                'error': f'Invalid Client ID or Client Secret. Please verify:\n'
+                        f'1. Client ID: {client_id[:30]}...\n'
+                        f'2. Client Secret: {client_secret[:10]}...\n'
+                        f'3. Make sure they match the credentials from Google Cloud Console\n'
+                        f'4. Ensure the OAuth client type is "Web application" (not Desktop)'
+            }), 400
+        return jsonify({'error': f'OAuth setup error: {error_msg}'}), 500
+
+
+@app.route('/oauth2callback')
+def oauth2callback():
+    """OAuth 2.0 callback handler"""
+    code = request.args.get('code')
+    state = request.args.get('state')
+    
+    if not code:
+        return '<html><body><h1>Authentication Failed</h1><p>No authorization code received.</p><script>setTimeout(() => window.close(), 3000);</script></body></html>', 400
+    
+    if not state:
+        return '<html><body><h1>Authentication Failed</h1><p>No state parameter received.</p><script>setTimeout(() => window.close(), 3000);</script></body></html>', 400
+    
+    # Try to get credentials from session first
+    client_id = session.get('oauth_client_id')
+    client_secret = session.get('oauth_client_secret')
+    redirect_uri = session.get('oauth_redirect_uri')
+    session_state = session.get('oauth_state')
+    
+    # If session state doesn't match, try to get from database
+    if state != session_state:
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            cursor.execute("""
+                SELECT client_id, client_secret, redirect_uri 
+                FROM oauth_states 
+                WHERE state = ? AND datetime(created_at) > datetime('now', '-10 minutes')
+            """, (state,))
+            row = cursor.fetchone()
+            if row:
+                client_id = row['client_id']
+                client_secret = row['client_secret']
+                redirect_uri = row['redirect_uri']
+                # Delete used state
+                cursor.execute("DELETE FROM oauth_states WHERE state = ?", (state,))
+                connection.commit()
+            cursor.close()
+            connection.close()
+        except Exception as e:
+            print(f"Error checking OAuth state in database: {e}")
+    
+    # Final validation
+    if state != session_state and not client_id:
+        return '<html><body><h1>Authentication Failed</h1><p>Invalid state parameter. Please try authenticating again.</p><script>setTimeout(() => window.close(), 3000);</script></body></html>', 400
+    
+    if not client_id or not client_secret:
+        return '<html><body><h1>Authentication Failed</h1><p>OAuth credentials not found. Please try authenticating again.</p><script>setTimeout(() => window.close(), 3000);</script></body></html>', 400
+    
+    if not redirect_uri:
+        redirect_uri = GMAIL_OAUTH_CONFIG.get('redirect_uri', 'http://localhost:5000/oauth2callback')
+    
+    try:
+        
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [redirect_uri]
+                }
+            },
+            scopes=GMAIL_OAUTH_CONFIG['scopes'],
+            redirect_uri=redirect_uri,
+            state=state
+        )
+        
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        
+        # Save credentials
+        save_oauth_token('gmail', creds)
+        
+        return '<html><body><h1>Authentication Successful!</h1><p>You can close this window and return to the app.</p><script>setTimeout(() => window.close(), 2000);</script></body></html>'
+    except Exception as e:
+        error_msg = str(e)
+        error_html = '<html><body style="font-family: Arial, sans-serif; padding: 20px;"><h1 style="color: #dc3545;">Authentication Error</h1>'
+        
+        if 'invalid_client' in error_msg.lower():
+            error_html += f'''
+            <div style="background-color: #f8d7da; border: 1px solid #dc3545; padding: 15px; border-radius: 4px; margin: 15px 0;">
+                <h2 style="color: #721c24; margin-top: 0;">Invalid Client ID or Client Secret</h2>
+                <p style="color: #721c24;"><strong>This error means your Client ID and Client Secret don't match.</strong></p>
+                <ol style="color: #721c24;">
+                    <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console Credentials</a></li>
+                    <li>Find your OAuth client: <code style="background: #fff; padding: 2px 5px;">{client_id[:50]}...</code></li>
+                    <li>Click on it to view details</li>
+                    <li>Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> again</li>
+                    <li>Make sure you're copying from a <strong>"Web application"</strong> type client (not Desktop)</li>
+                    <li>Paste them in the Settings page and try again</li>
+                </ol>
+                <p style="color: #721c24; margin-bottom: 0;"><strong>Note:</strong> Client Secret starts with "GOCSPX-" and you can only see it once when you create the client.</p>
+            </div>
+            '''
+        else:
+            error_html += f'<p style="color: #721c24;">{error_msg}</p>'
+        
+        error_html += '<p><button onclick="window.close()">Close Window</button></p>'
+        error_html += '<script>setTimeout(() => window.close(), 10000);</script></body></html>'
+        return error_html, 500
+
+
+@app.route('/api/gmail-status', methods=['GET'])
+def gmail_status():
+    """Check Gmail OAuth authentication status"""
+    creds = load_oauth_token('gmail')
+    if creds:
+        try:
+            # Try to verify token is valid
+            service = build('gmail', 'v1', credentials=creds)
+            profile = service.users().getProfile(userId='me').execute()
+            return jsonify({
+                'authenticated': True,
+                'email': profile.get('emailAddress', ''),
+                'messages_total': profile.get('messagesTotal', 0)
+            })
+        except Exception as e:
+            return jsonify({
+                'authenticated': False,
+                'error': f'Token invalid: {str(e)}',
+                'needs_auth': True
+            })
+    return jsonify({
+        'authenticated': False,
+        'needs_auth': True,
+        'message': 'Gmail OAuth not configured. Please set up OAuth credentials in Settings.'
+    })
+
+
 @app.route('/api/fetch-gmail', methods=['POST'])
 def fetch_gmail():
-    """Fetch emails from Gmail"""
+    """Fetch emails from Gmail using Gmail API"""
     data = request.json or {}
     limit = data.get('limit', 50)
     
-    # Use provided config or default
-    config = {
-        'imap_server': data.get('imap_server', GMAIL_CONFIG['imap_server']),
-        'port': data.get('port', GMAIL_CONFIG['port']),
-        'username': data.get('username', GMAIL_CONFIG['username']),
-        'password': data.get('password', GMAIL_CONFIG['password']),
-        'use_ssl': data.get('use_ssl', GMAIL_CONFIG.get('use_ssl', True)),
-        'use_tls': data.get('use_tls', GMAIL_CONFIG.get('use_tls', False))
-    }
+    # Check if OAuth is configured
+    creds = load_oauth_token('gmail')
+    if not creds:
+        return jsonify({
+            'error': 'Gmail OAuth not authenticated. Please:\n1. Go to Settings\n2. Enter OAuth Client ID and Client Secret\n3. Click "Authenticate Gmail"\n4. Complete the OAuth flow',
+            'needs_auth': True,
+            'setup_url': 'https://console.cloud.google.com/'
+        }), 401
     
-    result = fetch_emails(
-        config['imap_server'],
-        config['port'],
-        config['username'],
-        config['password'],
-        config['use_ssl'],
-        config['use_tls'],
-        limit
-    )
+    result = fetch_gmail_api(limit=limit, days_back=1)
+    
+    if 'error' in result:
+        return jsonify(result), 500
+    
     try:
         save_emails('gmail', result.get('emails', []))
     except Exception as exc:
         print(f"Error saving Gmail emails: {exc}")
+    
     return jsonify(result)
 
 
@@ -510,7 +1063,8 @@ def fetch_qq():
         password,
         data.get('use_ssl', QQ_CONFIG.get('use_ssl', True)),
         data.get('use_tls', QQ_CONFIG.get('use_tls', False)),
-        limit
+        limit,
+        days_back=1
     )
     try:
         save_emails('qq', result.get('emails', []))
@@ -542,7 +1096,8 @@ def fetch_163():
         config['password'],
         config['use_ssl'],
         config['use_tls'],
-        limit
+        limit,
+        days_back=1
     )
     try:
         save_emails('163', result.get('emails', []))
@@ -629,22 +1184,30 @@ def handle_emails():
         if not provider:
             return jsonify({'error': 'Provider query parameter is required'}), 400
 
-        today_iso = datetime.now().date().isoformat()
+        today_date = datetime.now().date()
+        yesterday_date = today_date - timedelta(days=1)
+        today_iso = today_date.isoformat()
+        yesterday_iso = yesterday_date.isoformat()
         connection = get_db_connection()
         cursor = connection.cursor()
         cursor.execute("""
-            SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, fetched_at
+            SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at
             FROM emails
             WHERE provider = ?
-              AND date(datetime(fetched_at)) = ?
+              AND date(datetime(fetched_at)) BETWEEN ? AND ?
             ORDER BY datetime(date) DESC, datetime(fetched_at) DESC
-        """, (provider, today_iso))
+        """, (provider, yesterday_iso, today_iso))
         rows = cursor.fetchall()
         cursor.close()
         connection.close()
 
         emails = []
         for row in rows:
+            attachments = []
+            try:
+                attachments = json.loads(row[10] or '[]')
+            except (TypeError, ValueError):
+                attachments = []
             emails.append({
                 'id': row[1],
                 'subject': row[2],
@@ -655,7 +1218,8 @@ def handle_emails():
                 'plain_body': row[7],
                 'html_body': row[8],
                 'sequence': row[9],
-                'fetched_at': row[10]
+                'attachments': attachments,
+                'fetched_at': row[11]
             })
 
         return jsonify({'provider': provider, 'emails': emails})
@@ -664,15 +1228,13 @@ def handle_emails():
         data = request.json or {}
         provider = (data.get('provider') or '').strip().lower()
         emails = data.get('emails') or []
-        target_date = data.get('date')  # Optional: YYYY-MM-DD format
-        
+
         if not provider:
             return jsonify({'error': 'Provider is required'}), 400
-        
+
         if not isinstance(emails, list):
             return jsonify({'error': 'Emails must be a list'}), 400
-        
-        # Save emails (save_emails handles the date from email.date field)
+
         save_emails(provider, emails)
         return jsonify({'status': 'saved', 'count': len(emails)})
 

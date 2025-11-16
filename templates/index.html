@@ -188,8 +188,59 @@
             word-break: break-word;
             overflow-wrap: anywhere;
             display: -webkit-box;
+            line-clamp: 3;
             -webkit-line-clamp: 3;
             -webkit-box-orient: vertical;
+        }
+
+        .email-attachments {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .attachment-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border: 1px solid #000000;
+            border-radius: 16px;
+            font-size: 12px;
+            text-decoration: none;
+            color: #000000;
+            background-color: #ffffff;
+        }
+
+        .attachment-chip:hover {
+            background-color: #f0f0f0;
+        }
+
+        .attachment-button {
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        .attachment-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .attachment-row {
+            border: 1px solid #000000;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .attachment-row-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .loading {
@@ -625,7 +676,23 @@
                 <div class="version-info">Version: <span id="version">v{{ version }}</span></div>
             </div>
             <div id="receive-mail-content">
+                <div style="margin-bottom: 20px; padding: 15px; border: 2px solid #000000; background-color: #f9f9f9;">
+                    <h3 style="font-family: Arial, sans-serif; font-size: 16px; color: #000000; margin-bottom: 10px;">Gmail Setup Required</h3>
+                    <p style="font-family: Arial, sans-serif; font-size: 12px; color: #666; margin-bottom: 10px;">
+                        Gmail now uses OAuth 2.0 API for fetching emails with attachments. Follow these steps:
+                    </p>
+                    <ol style="font-family: Arial, sans-serif; font-size: 12px; color: #000; margin-left: 20px; margin-bottom: 10px;">
+                        <li>Go to <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+                        <li>Create/select project → Enable Gmail API</li>
+                        <li>Create OAuth 2.0 Client ID (Web Application)</li>
+                        <li>Add redirect URI: <code>http://localhost:5000/oauth2callback</code></li>
+                        <li>Copy Client ID and Client Secret</li>
+                        <li>Go to Settings → Enter credentials → Click "Authenticate Gmail"</li>
+                    </ol>
+                    <button class="form-button" onclick="showSettings(); setTimeout(() => { const detail = document.getElementById('profile-detail-view'); if (detail && !detail.classList.contains('hidden')) { detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 500);" style="margin-right: 10px;">Go to Settings</button>
+                </div>
                 <button class="form-button" onclick="fetchGmailEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch Gmail</button>
+                <button class="form-button" onclick="checkGmailStatus()" style="margin-bottom: 20px; margin-right: 10px; font-size: 12px;">Check Gmail Status</button>
                 <button class="form-button" onclick="fetch163Emails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch 163.com</button>
                 <button class="form-button" onclick="fetchQQEmails()" style="margin-bottom: 20px;">Fetch QQ Email</button>
                 <div id="error-message" class="message hidden"></div>
@@ -749,6 +816,105 @@
                                 <span>Use TLS</span>
                             </label>
                         </div>
+                    </div>
+
+                    <div class="settings-section" style="margin-top: 30px; background-color: #f9f9f9; padding: 20px; border: 2px solid #000000;">
+                        <h3 style="font-family: Arial, sans-serif; font-size: 18px; color: #000000; margin-bottom: 15px; border-bottom: 1px solid #000000; padding-bottom: 10px;">Gmail API OAuth 2.0 (Required for Attachments)</h3>
+                        
+                        <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; margin-bottom: 20px; font-family: Arial, sans-serif; font-size: 13px;">
+                            <strong>📋 Quick Setup Guide (5 minutes):</strong>
+                            <ol style="margin: 10px 0; padding-left: 20px;">
+                                <li style="margin: 5px 0;">Click this link: <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color: #0066cc;">Open Google Cloud Console</a></li>
+                                <li style="margin: 5px 0;">At the top, click <strong>"+ CREATE CREDENTIALS"</strong> → Select <strong>"OAuth client ID"</strong></li>
+                                <li style="margin: 5px 0;">If asked, choose <strong>"Web application"</strong> as the type</li>
+                                <li style="margin: 5px 0;">Name it: <code>Mail Task App</code></li>
+                                <li style="margin: 5px 0;">Under "Authorized redirect URIs", click <strong>"+ ADD URI"</strong> and paste: <code style="background: #f0f0f0; padding: 2px 5px;">http://localhost:5000/oauth2callback</code></li>
+                                <li style="margin: 5px 0;">Click <strong>"CREATE"</strong></li>
+                                <li style="margin: 5px 0;">Copy the <strong>Client ID</strong> (long string ending in .apps.googleusercontent.com)</li>
+                                <li style="margin: 5px 0;">Copy the <strong>Client Secret</strong> (shorter string)</li>
+                                <li style="margin: 5px 0;">Paste them in the fields below</li>
+                                <li style="margin: 5px 0;">Click <strong>"Save Profile"</strong> then <strong>"Authenticate Gmail"</strong></li>
+                            </ol>
+                            <p style="margin: 10px 0 0 0; color: #856404;"><strong>Note:</strong> If you see "OAuth consent screen" error, click "CONFIGURE CONSENT SCREEN" first, choose "External", fill in app name and your email, then continue. <strong>After creating the OAuth client, you MUST add yourself as a test user in the OAuth consent screen!</strong></p>
+                            <div style="margin-top: 15px; padding: 10px; background-color: #f8d7da; border: 1px solid #dc3545; border-radius: 4px;">
+                                <strong style="color: #721c24;">⚠️ IMPORTANT: You Need a "Web Application" OAuth Client!</strong>
+                                <p style="margin: 5px 0; font-size: 12px;">I see you have a "Desktop client 1" (Type: Desktop). We need a <strong>"Web application"</strong> type instead.</p>
+                                <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 10px; margin: 10px 0; border-radius: 4px;">
+                                    <strong style="color: #856404;">📝 Create a NEW Web Application OAuth Client:</strong>
+                                    <ol style="margin: 5px 0; padding-left: 20px; font-size: 12px;">
+                                        <li>On the Credentials page, click <strong>"+ CREATE CREDENTIALS"</strong> (top blue button)</li>
+                                        <li>Select <strong>"OAuth client ID"</strong> from the dropdown</li>
+                                        <li>If asked for "Application type", select <strong>"Web application"</strong> (NOT Desktop!)</li>
+                                        <li>Name it: <code style="background: #f0f0f0; padding: 2px 5px;">Mail Task Web App</code></li>
+                                        <li><strong>IMPORTANT:</strong> There are TWO different fields - fill BOTH:</li>
+                                        <li style="margin-left: 20px;">
+                                            <strong>1. "Authorized JavaScript origins"</strong> (if shown):
+                                            <ul style="margin: 5px 0; padding-left: 20px;">
+                                                <li>Click <strong>"+ ADD URI"</strong></li>
+                                                <li>Enter ONLY: <code style="background: #f0f0f0; padding: 2px 5px;">http://localhost:5000</code> (NO path!)</li>
+                                            </ul>
+                                        </li>
+                                        <li style="margin-left: 20px;">
+                                            <strong>2. "Authorized redirect URIs"</strong>:
+                                            <ul style="margin: 5px 0; padding-left: 20px;">
+                                                <li>Click <strong>"+ ADD URI"</strong></li>
+                                                <li>Enter FULL path: <code style="background: #f0f0f0; padding: 2px 5px;">http://localhost:5000/oauth2callback</code></li>
+                                            </ul>
+                                        </li>
+                                        <li>Click <strong>"CREATE"</strong></li>
+                                        <li>A popup will show your <strong>Client ID</strong> and <strong>Client Secret</strong></li>
+                                        <li><strong>Copy BOTH immediately</strong> (the secret won't be shown again!)</li>
+                                        <li>Paste them in the fields below</li>
+                                    </ol>
+                                    <div style="background-color: #f8d7da; border: 1px solid #dc3545; padding: 8px; margin-top: 10px; border-radius: 4px; font-size: 11px;">
+                                        <strong style="color: #721c24;">⚠️ Common Error:</strong> If you see "Invalid origin: URIs must not contain a path", you're entering the redirect URI in the wrong field. Use <code>http://localhost:5000</code> (no path) for "Authorized JavaScript origins" and <code>http://localhost:5000/oauth2callback</code> (with path) for "Authorized redirect URIs".
+                                    </div>
+                                </div>
+                                <p style="margin: 10px 0 0 0; font-size: 11px; color: #721c24;"><strong>Note:</strong> The existing "Desktop client 1" won't work for web redirects. You must create a new "Web application" client.</p>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="gmail-oauth-client-id">OAuth Client ID:</label>
+                            <input type="text" id="gmail-oauth-client-id" placeholder="123456789-abc123def456.apps.googleusercontent.com" style="font-family: monospace; font-size: 12px;" value="">
+                            <small style="font-size: 11px; color: #666;">Enter your Client ID from Google Cloud Console</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="gmail-oauth-client-secret">OAuth Client Secret:</label>
+                            <input type="password" id="gmail-oauth-client-secret" placeholder="GOCSPX-xxxxxxxxxxxxx" style="font-family: monospace; font-size: 12px;" value="">
+                            <small style="font-size: 11px; color: #666;">Enter your Client Secret from Google Cloud Console (starts with GOCSPX-)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="gmail-oauth-redirect-uri">Redirect URI:</label>
+                            <input type="text" id="gmail-oauth-redirect-uri" placeholder="http://localhost:5000/oauth2callback" value="http://localhost:5000/oauth2callback" readonly style="background-color: #f5f5f5;">
+                            <small style="font-size: 11px; color: #666;">This should match what you entered in Google Cloud Console</small>
+                        </div>
+                        <div style="background-color: #f8d7da; border: 2px solid #dc3545; padding: 15px; margin: 15px 0; border-radius: 4px; font-family: Arial, sans-serif; font-size: 13px;">
+                            <strong style="color: #721c24; font-size: 14px;">🚨 CRITICAL: You MUST Add Yourself as Test User!</strong>
+                            <p style="margin: 10px 0 8px 0; color: #721c24; font-weight: bold;">If you see "403: access_denied" or "尚未完成 Google 验证流程", follow these steps:</p>
+                            <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 12px; margin: 10px 0; border-radius: 4px;">
+                                <strong style="color: #856404;">Step-by-Step Instructions:</strong>
+                                <ol style="margin: 8px 0; padding-left: 25px; color: #856404; line-height: 1.8;">
+                                    <li>Click this link: <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" style="color: #0066cc; font-weight: bold; text-decoration: underline;">Open OAuth Consent Screen</a></li>
+                                    <li>Make sure you're on the <strong>"OAuth consent screen"</strong> page</li>
+                                    <li>Scroll down to find the section titled <strong>"Test users"</strong> (测试用户)</li>
+                                    <li>You should see a button <strong>"+ ADD USERS"</strong> or <strong>"添加用户"</strong> - Click it!</li>
+                                    <li>In the popup/dialog, enter your Gmail address: <code style="background: #f0f0f0; padding: 3px 6px; border: 1px solid #ccc; font-weight: bold;">eric.brilliant@gmail.com</code></li>
+                                    <li>Click <strong>"ADD"</strong> or <strong>"添加"</strong> button</li>
+                                    <li>You should see your email appear in the test users list</li>
+                                    <li><strong>Wait 1-2 minutes</strong> for Google to process the change</li>
+                                    <li>Come back to this page and click <strong>"🔐 Authenticate Gmail"</strong> again</li>
+                                </ol>
+                                <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; padding: 8px; margin-top: 10px; border-radius: 4px; font-size: 11px;">
+                                    <strong style="color: #0c5460;">💡 Tip:</strong> Make sure you're logged into Google Cloud Console with the same Google account that owns the project. The test user email must match exactly (case-sensitive).
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group" style="display: flex; gap: 10px; align-items: center;">
+                            <button class="form-button" onclick="authenticateGmail()" style="margin-top: 10px;">🔐 Authenticate Gmail</button>
+                            <button class="form-button" onclick="checkGmailStatus()" style="margin-top: 10px; font-size: 12px;">✓ Check Status</button>
+                        </div>
+                        <div id="gmail-auth-status" style="margin-top: 10px; font-family: Arial, sans-serif; font-size: 12px;"></div>
                     </div>
 
                     <div class="settings-section" style="margin-top: 30px;">
@@ -909,6 +1075,18 @@
         </div>
     </div>
 
+    <div id="attachment-modal" class="modal hidden" onclick="closeAttachmentModal()" role="dialog" aria-modal="true" aria-labelledby="attachment-modal-title">
+        <div class="modal-dialog" onclick="event.stopPropagation();">
+            <div class="modal-header">
+                <div class="modal-title" id="attachment-modal-title">Attachments</div>
+                <button class="modal-close" onclick="closeAttachmentModal()">Close</button>
+            </div>
+            <div class="modal-body">
+                <div id="attachment-list" class="attachment-list"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="task-modal" class="modal hidden" onclick="closeTaskModal()" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
         <div class="modal-dialog" onclick="event.stopPropagation();">
             <div class="modal-header">
@@ -953,6 +1131,8 @@
         const emailModalSubject = document.getElementById('email-modal-subject');
         const emailModalMeta = document.getElementById('email-modal-meta');
         const emailModalFrame = document.getElementById('email-modal-frame');
+        const attachmentModal = document.getElementById('attachment-modal');
+        const attachmentList = document.getElementById('attachment-list');
         const taskModal = document.getElementById('task-modal');
         const taskCustomerInput = document.getElementById('task-customer');
         const taskEmailInput = document.getElementById('task-email');
@@ -988,6 +1168,14 @@
             const mm = String(d.getMonth() + 1).padStart(2, '0');
             const dd = String(d.getDate()).padStart(2, '0');
             return `${yyyy}-${mm}-${dd}`;
+        }
+
+        function normalizeEmailDate(email) {
+            const raw = (email?.date || '').slice(0, 10);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+                return raw;
+            }
+            return getTodayKey();
         }
 
         function extractEmailAddress(rawFrom) {
@@ -1035,27 +1223,55 @@
             return email;
         }
 
-        function cacheEmails(provider, emails) {
-            try {
-                const key = `emails:${provider}:${getTodayKey()}`;
-                const enriched = (emails || []).map(item => ensureEmailSequence({ ...item }));
-                localStorage.setItem(key, JSON.stringify({ date: getTodayKey(), emails: enriched }));
-                if (provider) {
-                    localStorage.setItem('lastEmailProvider', provider);
+        function groupEmailsByDate(emails) {
+            const grouped = {};
+            (emails || []).forEach(item => {
+                const enriched = ensureEmailSequence({ ...item });
+                const dateKey = normalizeEmailDate(enriched);
+                if (!grouped[dateKey]) {
+                    grouped[dateKey] = [];
                 }
-            } catch {}
+                grouped[dateKey].push(enriched);
+            });
+            return grouped;
+        }
+
+        function cacheEmails(provider, emails) {
+            if (!provider) {
+                return;
+            }
+            try {
+                const grouped = groupEmailsByDate(emails);
+                Object.entries(grouped).forEach(([dateKey, list]) => {
+                    const storageKey = `emails:${provider}:${dateKey}`;
+                    localStorage.setItem(storageKey, JSON.stringify({ date: dateKey, emails: list }));
+                });
+                localStorage.setItem('lastEmailProvider', provider);
+            } catch (error) {
+                console.error('Failed to cache emails', error);
+            }
         }
 
         function loadCachedEmails(provider) {
+            if (!provider) return null;
             try {
-                const key = `emails:${provider}:${getTodayKey()}`;
-                const raw = localStorage.getItem(key);
-                if (!raw) return null;
-                const parsed = JSON.parse(raw);
-                if (parsed?.date === getTodayKey() && Array.isArray(parsed.emails)) {
-                    return parsed.emails.map(item => ensureEmailSequence(item));
-                }
-            } catch {}
+                const dateKeys = [getTodayKey(), getYesterdayKey()];
+                const collected = [];
+                dateKeys.forEach(dateKey => {
+                    const storageKey = `emails:${provider}:${dateKey}`;
+                    const raw = localStorage.getItem(storageKey);
+                    if (!raw) return;
+                    const parsed = JSON.parse(raw);
+                    if (parsed?.date === dateKey && Array.isArray(parsed.emails)) {
+                        parsed.emails.forEach(email => {
+                            collected.push(ensureEmailSequence({ ...email }));
+                        });
+                    }
+                });
+                return collected.length > 0 ? collected : null;
+            } catch (error) {
+                console.error('Failed to load cached emails', error);
+            }
             return null;
         }
 
@@ -1254,6 +1470,10 @@
             document.getElementById('gmail-use-ssl').checked = profile.gmail?.use_ssl ?? true;
             document.getElementById('gmail-use-tls').checked = profile.gmail?.use_tls ?? false;
 
+            document.getElementById('gmail-oauth-client-id').value = profile.gmail?.oauth_client_id || '';
+            document.getElementById('gmail-oauth-client-secret').value = profile.gmail?.oauth_client_secret || '';
+            document.getElementById('gmail-oauth-redirect-uri').value = profile.gmail?.oauth_redirect_uri || 'http://localhost:5000/oauth2callback';
+
             document.getElementById('163-imap-server').value = profile.email163?.imap_server || '';
             document.getElementById('163-port').value = profile.email163?.port || 993;
             document.getElementById('163-username').value = profile.email163?.username || '';
@@ -1308,7 +1528,10 @@
                 username: document.getElementById('gmail-username').value.trim(),
                 password: document.getElementById('gmail-password').value.trim(),
                 use_ssl: document.getElementById('gmail-use-ssl').checked,
-                use_tls: document.getElementById('gmail-use-tls').checked
+                use_tls: document.getElementById('gmail-use-tls').checked,
+                oauth_client_id: document.getElementById('gmail-oauth-client-id').value.trim(),
+                oauth_client_secret: document.getElementById('gmail-oauth-client-secret').value.trim(),
+                oauth_redirect_uri: document.getElementById('gmail-oauth-redirect-uri').value.trim() || 'http://localhost:5000/oauth2callback'
             };
             
             // Save 163.com settings
@@ -1469,6 +1692,7 @@
                             })
                         });
                         console.log(`Saved ${emails.length} yesterday emails for ${provider} to SQLite`);
+                        localStorage.removeItem(key);
                     }
                 } catch (error) {
                     console.error(`Failed to save yesterday emails for ${provider}:`, error);
@@ -1493,6 +1717,9 @@
                 }
                 if (evt.key === 'Escape' && !taskModal.classList.contains('hidden')) {
                     closeTaskModal();
+                }
+                if (evt.key === 'Escape' && !attachmentModal.classList.contains('hidden')) {
+                    closeAttachmentModal();
                 }
             });
 
@@ -1613,6 +1840,142 @@
             }
         }
 
+        function authenticateGmail() {
+            // Get values from form fields (in case user just entered them)
+            const clientId = document.getElementById('gmail-oauth-client-id').value.trim();
+            const clientSecret = document.getElementById('gmail-oauth-client-secret').value.trim();
+            const redirectUri = document.getElementById('gmail-oauth-redirect-uri').value.trim() || 'http://localhost:5000/oauth2callback';
+            
+            // If form fields are empty, try to get from profile
+            const profile = getCurrentProfile();
+            const gmail = profile.gmail || {};
+            const finalClientId = clientId || gmail.oauth_client_id || '';
+            const finalClientSecret = clientSecret || gmail.oauth_client_secret || '';
+            const finalRedirectUri = redirectUri || gmail.oauth_redirect_uri || 'http://localhost:5000/oauth2callback';
+            
+            const statusDiv = document.getElementById('gmail-auth-status');
+            if (statusDiv) {
+                statusDiv.innerHTML = '<span style="color: #0066cc;">Starting authentication...</span>';
+            }
+            
+            if (!finalClientId || !finalClientSecret) {
+                const msg = 'Please enter Gmail OAuth Client ID and Client Secret in the fields above first.';
+                if (statusDiv) {
+                    statusDiv.innerHTML = `<span style="color: #dc3545;">❌ ${msg}</span>`;
+                } else {
+                    alert(msg);
+                }
+                return;
+            }
+            
+            // Validate format
+            if (!finalClientId.includes('.apps.googleusercontent.com')) {
+                const msg = 'Client ID should end with .apps.googleusercontent.com';
+                if (statusDiv) {
+                    statusDiv.innerHTML = `<span style="color: #dc3545;">❌ ${msg}</span>`;
+                } else {
+                    alert(msg);
+                }
+                return;
+            }
+            
+            const params = new URLSearchParams({
+                client_id: finalClientId,
+                client_secret: finalClientSecret,
+                redirect_uri: finalRedirectUri
+            });
+            
+            fetch(`/api/gmail-auth?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        const msg = `Authentication error: ${data.error}`;
+                        if (statusDiv) {
+                            statusDiv.innerHTML = `<span style="color: #dc3545;">❌ ${msg}</span>`;
+                        } else {
+                            alert(msg);
+                        }
+                    } else if (data.auth_url) {
+                        if (statusDiv) {
+                            statusDiv.innerHTML = '<span style="color: #28a745;">Opening authentication window...</span>';
+                        }
+                        // Open OAuth window
+                        const authWindow = window.open(data.auth_url, 'Gmail Auth', 'width=600,height=700,scrollbars=yes');
+                        
+                        if (!authWindow) {
+                            alert('Popup blocked! Please allow popups for this site and try again.');
+                            if (statusDiv) {
+                                statusDiv.innerHTML = '<span style="color: #dc3545;">❌ Popup blocked. Please allow popups.</span>';
+                            }
+                            return;
+                        }
+                        
+                        // Check if window was closed (user completed auth)
+                        const checkClosed = setInterval(() => {
+                            if (authWindow.closed) {
+                                clearInterval(checkClosed);
+                                if (statusDiv) {
+                                    statusDiv.innerHTML = '<span style="color: #0066cc;">Checking authentication...</span>';
+                                }
+                                // Check status after a delay
+                                setTimeout(() => {
+                                    checkGmailStatus();
+                                    // Try fetching emails after auth
+                                    setTimeout(() => {
+                                        if (window.location.hash !== '#settings') {
+                                            fetchGmailEmails();
+                                        }
+                                    }, 2000);
+                                }, 1000);
+                            }
+                        }, 500);
+                    }
+                })
+                .catch(error => {
+                    const msg = `Error starting authentication: ${error.message}`;
+                    if (statusDiv) {
+                        statusDiv.innerHTML = `<span style="color: #dc3545;">❌ ${msg}</span>`;
+                    } else {
+                        alert(msg);
+                    }
+                });
+        }
+
+        function checkGmailStatus() {
+            const statusDiv = document.getElementById('gmail-auth-status');
+            if (statusDiv) {
+                statusDiv.innerHTML = '<span style="color: #0066cc;">Checking...</span>';
+            }
+            
+            fetch('/api/gmail-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.authenticated) {
+                        const msg = `✅ Authenticated!\nEmail: ${data.email}\nTotal messages: ${data.messages_total}`;
+                        if (statusDiv) {
+                            statusDiv.innerHTML = `<span style="color: #28a745;">${msg.replace(/\n/g, '<br>')}</span>`;
+                        } else {
+                            alert(msg);
+                        }
+                    } else {
+                        const msg = data.message || 'Gmail OAuth is not authenticated. Please configure it above.';
+                        if (statusDiv) {
+                            statusDiv.innerHTML = `<span style="color: #dc3545;">❌ ${msg}</span>`;
+                        } else {
+                            alert(msg);
+                        }
+                    }
+                })
+                .catch(error => {
+                    const msg = `Error checking status: ${error.message}`;
+                    if (statusDiv) {
+                        statusDiv.innerHTML = `<span style="color: #dc3545;">❌ ${msg}</span>`;
+                    } else {
+                        alert(msg);
+                    }
+                });
+        }
+
         function fetchGmailEmails() {
             const emailList = document.getElementById('email-list');
             emailList.innerHTML = '<div class="loading">Loading Gmail emails...</div>';
@@ -1623,28 +1986,31 @@
                 displayEmails(cached, { provider: 'gmail', cached: true });
             }
             
-            const profile = getCurrentProfile();
-            const gmail = profile.gmail || {};
-            const requestData = {
-                limit: 50,
-                imap_server: gmail.imap_server || 'imap.gmail.com',
-                port: gmail.port || 993,
-                username: gmail.username || '',
-                password: gmail.password || '',
-                use_ssl: gmail.use_ssl !== undefined ? gmail.use_ssl : true,
-                use_tls: gmail.use_tls || false
-            };
-            
             fetch('/api/fetch-gmail', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(requestData)
+                body: JSON.stringify({ limit: 50 })
             })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
+                .then(async response => {
+                    const data = await response.json();
+                    if (response.status === 401 && data.needs_auth) {
+                        const errorMsg = data.error || 'Gmail OAuth authentication required.';
+                        emailList.innerHTML = `
+                            <div class="message error" style="white-space: pre-line;">
+                                <p><strong>Gmail OAuth Setup Required</strong></p>
+                                <p>${escapeHtml(errorMsg)}</p>
+                                <div style="margin-top: 15px;">
+                                    <button class="form-button" onclick="showSettings(); setTimeout(() => { const detail = document.getElementById('profile-detail-view'); if (detail && !detail.classList.contains('hidden')) { detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 500);" style="margin-right: 10px;">Go to Settings</button>
+                                    <button class="form-button" onclick="authenticateGmail()">Authenticate Gmail</button>
+                                </div>
+                                <p style="margin-top: 15px; font-size: 12px;">
+                                    <a href="${data.setup_url || 'https://console.cloud.google.com/'}" target="_blank">Get OAuth Credentials from Google Cloud Console</a>
+                                </p>
+                            </div>
+                        `;
+                    } else if (data.error) {
                         emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
                     } else {
                         const list = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
@@ -1856,6 +2222,14 @@
                 });
         }
 
+        function formatAttachmentSize(bytes) {
+            const size = Number(bytes) || 0;
+            if (size >= 1024 * 1024) {
+                return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+            }
+            return `${(size / 1024).toFixed(1)} KB`;
+        }
+
         function displayEmails(emails, options = {}) {
             const emailList = document.getElementById('email-list');
             currentEmails = Array.isArray(emails) ? emails.map(email => ensureEmailSequence({ ...email })) : [];
@@ -1871,7 +2245,7 @@
             emailList.dataset.cached = isCached ? 'true' : 'false';
 
             if (currentEmails.length === 0) {
-                emailList.innerHTML = '<div class="loading">No emails found for today</div>';
+                emailList.innerHTML = '<div class="loading">No emails found for today or yesterday</div>';
                 return;
             }
             
@@ -1887,8 +2261,22 @@
                     </div>
                     <div class="email-from">From: ${escapeHtml(email.from || '')}</div>
                         <div class="email-preview">${escapeHtml(email.preview || '')}</div>
+                        ${Array.isArray(email.attachments) && email.attachments.length > 0 ? `
+                            <div class="email-attachments">
+                                ${email.attachments.map(att => `
+                                    <a class="attachment-chip" href="data:${att.content_type || 'application/octet-stream'};base64,${att.data}" download="${escapeHtml(att.filename || 'attachment')}">
+                                        📎 ${escapeHtml(att.filename || 'attachment')} (${formatAttachmentSize(att.size || 0)})
+                                    </a>
+                                `).join('')}
+                            </div>
+                        ` : ''}
                     </div>
                     <div class="email-actions">
+                        ${Array.isArray(email.attachments) && email.attachments.length > 0 ? `
+                            <button class="form-button email-action-button attachment-button" data-index="${index}" data-attachment="true" title="View attachments">
+                                📎 (${email.attachments.length})
+                            </button>
+                        ` : ''}
                         <button class="form-button email-action-button" data-index="${index}">Task</button>
                     </div>
                 </div>
@@ -1905,7 +2293,11 @@
                 button.addEventListener('click', (evt) => {
                     evt.stopPropagation();
                     const index = parseInt(button.getAttribute('data-index'), 10);
-                    openTaskModal(index);
+                    if (button.dataset.attachment === 'true') {
+                        openAttachmentModal(index);
+                    } else {
+                        openTaskModal(index);
+                    }
                 });
             });
         }
@@ -1939,6 +2331,33 @@
         function closeEmailModal() {
             emailModal.classList.add('hidden');
             emailModalFrame.srcdoc = '';
+        }
+
+        function openAttachmentModal(index) {
+            if (Number.isNaN(index)) {
+                return;
+            }
+            const email = currentEmails[index];
+            if (!email || !Array.isArray(email.attachments) || email.attachments.length === 0) {
+                return;
+            }
+            attachmentList.innerHTML = email.attachments.map((att, idx) => `
+                <div class="attachment-row">
+                    <div class="attachment-row-info">
+                        <strong>${escapeHtml(att.filename || `Attachment ${idx + 1}`)}</strong>
+                        <span>${att.content_type || 'application/octet-stream'} • ${formatAttachmentSize(att.size || 0)}</span>
+                    </div>
+                    <a class="form-button" href="data:${att.content_type || 'application/octet-stream'};base64,${att.data}" download="${escapeHtml(att.filename || `attachment-${idx + 1}`)}">
+                        Download
+                    </a>
+                </div>
+            `).join('');
+            attachmentModal.classList.remove('hidden');
+        }
+
+        function closeAttachmentModal() {
+            attachmentModal.classList.add('hidden');
+            attachmentList.innerHTML = '';
         }
 
         function openTaskModal(index) {

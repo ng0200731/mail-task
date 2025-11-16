@@ -1,4 +1,53 @@
+# Database files (contains email data, customer data, OAuth tokens)
+*.db
+*.sqlite
+*.sqlite3
 mailtask.db
-__pycache__/
-*.pyc
+
+# OAuth tokens and credentials
+oauth_tokens.json
+credentials.json
+token.json
+*.pem
+*.key
+
+# Environment variables and secrets
 .env
+.env.local
+.env.*.local
+*.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Log files (may contain sensitive information)
+*.log
+logs/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp

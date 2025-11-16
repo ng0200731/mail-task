@@ -1819,6 +1819,37 @@
             }
         }
 
+        function showMessage(message, type = 'info', timeoutMs = 5000) {
+            // Use error-message div or create a new one
+            let messageDiv = document.getElementById('error-message');
+            if (!messageDiv) {
+                // Create message div if it doesn't exist
+                messageDiv = document.createElement('div');
+                messageDiv.id = 'error-message';
+                messageDiv.className = 'message';
+                const contentArea = document.getElementById('content-area');
+                if (contentArea) {
+                    contentArea.insertBefore(messageDiv, contentArea.firstChild);
+                }
+            }
+            messageDiv.textContent = message;
+            const typeClass = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            messageDiv.className = `message ${typeClass}`;
+            messageDiv.classList.remove('hidden');
+            if (timeoutMs > 0) {
+                setTimeout(() => {
+                    messageDiv.classList.add('hidden');
+                }, timeoutMs);
+            }
+        }
+
+        function hideMessage() {
+            const messageDiv = document.getElementById('error-message');
+            if (messageDiv) {
+                messageDiv.classList.add('hidden');
+            }
+        }
+
         function getCurrentProfile() {
             // Get selected profile from localStorage or default to profile1
             const selectedProfile = localStorage.getItem('selectedProfile') || 'profile1';
@@ -1980,12 +2011,58 @@
 
         function fetchGmailEmails() {
             const emailList = document.getElementById('email-list');
-            emailList.innerHTML = '<div class="loading">Loading Gmail emails...</div>';
             
-            // Show cached emails immediately if available
-            const cached = loadCachedEmails('gmail');
-            if (cached && Array.isArray(cached)) {
-                displayEmails(cached, { provider: 'gmail', cached: true });
+            // Create a set of unique identifiers for existing emails
+            // Use multiple fields to catch duplicates: sequence code, ID, or subject+date+from
+            const existingEmailKeys = new Set();
+            (currentEmails || []).forEach(email => {
+                const emailObj = ensureEmailSequence({ ...email });
+                // Use sequence code as primary key (most reliable)
+                if (emailObj.sequence) {
+                    existingEmailKeys.add(`seq:${emailObj.sequence}`);
+                }
+                // Also use ID as backup
+                const id = emailObj.id || emailObj.email_uid || '';
+                if (id) {
+                    existingEmailKeys.add(`id:${id}`);
+                }
+                // Use subject + date + from as fallback
+                const subject = (emailObj.subject || '').trim();
+                const date = (emailObj.date || '').trim();
+                const from = (emailObj.from || '').trim();
+                if (subject && date && from) {
+                    existingEmailKeys.add(`key:${subject}|${date}|${from}`);
+                }
+            });
+            
+            const existingCount = existingEmailKeys.size;
+            
+            // Show popup message: "Checking for new emails from web page"
+            showMessage('Checking for new emails from web page...', 'info');
+            
+            // If no emails are displayed, load from cache first
+            if (existingCount === 0) {
+                const cached = loadCachedEmails('gmail');
+                if (cached && Array.isArray(cached) && cached.length > 0) {
+                    displayEmails(cached, { provider: 'gmail', cached: true });
+                    // Update existing keys after displaying cached emails
+                    currentEmails.forEach(email => {
+                        const emailObj = ensureEmailSequence({ ...email });
+                        if (emailObj.sequence) {
+                            existingEmailKeys.add(`seq:${emailObj.sequence}`);
+                        }
+                        const id = emailObj.id || emailObj.email_uid || '';
+                        if (id) {
+                            existingEmailKeys.add(`id:${id}`);
+                        }
+                        const subject = (emailObj.subject || '').trim();
+                        const date = (emailObj.date || '').trim();
+                        const from = (emailObj.from || '').trim();
+                        if (subject && date && from) {
+                            existingEmailKeys.add(`key:${subject}|${date}|${from}`);
+                        }
+                    });
+                }
             }
             
             fetch('/api/fetch-gmail', {
@@ -2012,16 +2089,68 @@
                                 </p>
                             </div>
                         `;
+                        hideMessage();
                     } else if (data.error) {
-                        emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
+                        showMessage(`Error: ${escapeHtml(data.error)}`, 'error');
                     } else {
-                        const list = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
-                        cacheEmails('gmail', list);
-                        displayEmails(list, { provider: 'gmail' });
+                        const fetchedEmails = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
+                        
+                        // Filter out emails that are already displayed using multiple criteria
+                        const newEmails = fetchedEmails.filter(email => {
+                            const emailObj = ensureEmailSequence({ ...email });
+                            
+                            // Check by sequence code (most reliable)
+                            if (emailObj.sequence) {
+                                if (existingEmailKeys.has(`seq:${emailObj.sequence}`)) {
+                                    return false; // Duplicate found
+                                }
+                            }
+                            
+                            // Check by ID
+                            const id = emailObj.id || emailObj.email_uid || '';
+                            if (id && existingEmailKeys.has(`id:${id}`)) {
+                                return false; // Duplicate found
+                            }
+                            
+                            // Check by subject + date + from
+                            const subject = (emailObj.subject || '').trim();
+                            const date = (emailObj.date || '').trim();
+                            const from = (emailObj.from || '').trim();
+                            if (subject && date && from) {
+                                if (existingEmailKeys.has(`key:${subject}|${date}|${from}`)) {
+                                    return false; // Duplicate found
+                                }
+                            }
+                            
+                            return true; // New email
+                        });
+                        
+                        // Merge new emails with existing ones
+                        const mergedEmails = [...currentEmails, ...newEmails];
+                        
+                        // Sort by date (newest first)
+                        mergedEmails.sort((a, b) => {
+                            const dateA = new Date(a.date || 0);
+                            const dateB = new Date(b.date || 0);
+                            return dateB - dateA;
+                        });
+                        
+                        // Update cache with all emails
+                        cacheEmails('gmail', mergedEmails);
+                        
+                        // Display merged emails
+                        displayEmails(mergedEmails, { provider: 'gmail' });
+                        
+                        // Show result message
+                        if (newEmails.length > 0) {
+                            showMessage(`Found ${newEmails.length} new email(s) and added to the list.`, 'success');
+                        } else {
+                            showMessage('No new emails found. All emails are up to date.', 'info');
+                        }
                     }
                 })
                 .catch(error => {
-                    emailList.innerHTML = `<div class="message error">Error fetching emails: ${escapeHtml(error.message)}</div>`;
+                    showMessage(`Error fetching emails: ${escapeHtml(error.message)}`, 'error');
                 });
         }
 

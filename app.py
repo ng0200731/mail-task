@@ -20,7 +20,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 app = Flask(__name__)
-app.config['VERSION'] = '1.0.43'
+app.config['VERSION'] = '1.0.46'
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Default email configurations (can be overridden via settings)
@@ -1032,11 +1032,13 @@ def fetch_gmail():
             'setup_url': 'https://console.cloud.google.com/'
         }), 401
     
-    result = fetch_gmail_api(limit=limit, days_back=1)
+    # Only fetch today's emails (days_back=0 means only today)
+    result = fetch_gmail_api(limit=limit, days_back=0)
     
     if 'error' in result:
         return jsonify(result), 500
     
+    # Save emails to SQL database
     try:
         save_emails('gmail', result.get('emails', []))
     except Exception as exc:
@@ -1184,19 +1186,18 @@ def handle_emails():
         if not provider:
             return jsonify({'error': 'Provider query parameter is required'}), 400
 
+        # Only load today's emails from SQL
         today_date = datetime.now().date()
-        yesterday_date = today_date - timedelta(days=1)
         today_iso = today_date.isoformat()
-        yesterday_iso = yesterday_date.isoformat()
         connection = get_db_connection()
         cursor = connection.cursor()
         cursor.execute("""
             SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at
             FROM emails
             WHERE provider = ?
-              AND date(datetime(fetched_at)) BETWEEN ? AND ?
+              AND date(datetime(fetched_at)) = ?
             ORDER BY datetime(date) DESC, datetime(fetched_at) DESC
-        """, (provider, yesterday_iso, today_iso))
+        """, (provider, today_iso))
         rows = cursor.fetchall()
         cursor.close()
         connection.close()

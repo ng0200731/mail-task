@@ -71,6 +71,46 @@
             background-color: #ffffff;
             padding: 20px;
             overflow-y: auto;
+            position: relative;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loading-overlay-content {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            color: #000000;
+        }
+
+        .loading-spinner {
+            border: 3px solid #f0f0f0;
+            border-top: 3px solid #000000;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .content-header {
@@ -673,26 +713,17 @@
             </button>
         </div>
         <div class="right-content">
+            <div class="loading-overlay" id="email-loading-overlay">
+                <div class="loading-overlay-content">
+                    <div class="loading-spinner"></div>
+                    <div>Checking for new emails from web page...</div>
+                </div>
+            </div>
             <div class="content-header">
                 <h2 id="content-title">Receive Mail</h2>
                 <div class="version-info">Version: <span id="version">v{{ version }}</span></div>
             </div>
             <div id="receive-mail-content">
-                <div style="margin-bottom: 20px; padding: 15px; border: 2px solid #000000; background-color: #f9f9f9;">
-                    <h3 style="font-family: Arial, sans-serif; font-size: 16px; color: #000000; margin-bottom: 10px;">Gmail Setup Required</h3>
-                    <p style="font-family: Arial, sans-serif; font-size: 12px; color: #666; margin-bottom: 10px;">
-                        Gmail now uses OAuth 2.0 API for fetching emails with attachments. Follow these steps:
-                    </p>
-                    <ol style="font-family: Arial, sans-serif; font-size: 12px; color: #000; margin-left: 20px; margin-bottom: 10px;">
-                        <li>Go to <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
-                        <li>Create/select project → Enable Gmail API</li>
-                        <li>Create OAuth 2.0 Client ID (Web Application)</li>
-                        <li>Add redirect URI: <code>http://localhost:5000/oauth2callback</code></li>
-                        <li>Copy Client ID and Client Secret</li>
-                        <li>Go to Settings → Enter credentials → Click "Authenticate Gmail"</li>
-                    </ol>
-                    <button class="form-button" onclick="showSettings(); setTimeout(() => { const detail = document.getElementById('profile-detail-view'); if (detail && !detail.classList.contains('hidden')) { detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 500);" style="margin-right: 10px;">Go to Settings</button>
-                </div>
                 <button class="form-button" onclick="fetchGmailEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch Gmail</button>
                 <button class="form-button" onclick="checkGmailStatus()" style="margin-bottom: 20px; margin-right: 10px; font-size: 12px;">Check Gmail Status</button>
                 <button class="form-button" onclick="fetch163Emails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch 163.com</button>
@@ -1850,6 +1881,20 @@
             }
         }
 
+        function showEmailLoadingOverlay() {
+            const overlay = document.getElementById('email-loading-overlay');
+            if (overlay) {
+                overlay.classList.add('active');
+            }
+        }
+
+        function hideEmailLoadingOverlay() {
+            const overlay = document.getElementById('email-loading-overlay');
+            if (overlay) {
+                overlay.classList.remove('active');
+            }
+        }
+
         function getCurrentProfile() {
             // Get selected profile from localStorage or default to profile1
             const selectedProfile = localStorage.getItem('selectedProfile') || 'profile1';
@@ -2012,6 +2057,9 @@
         function fetchGmailEmails() {
             const emailList = document.getElementById('email-list');
             
+            // Show loading overlay
+            showEmailLoadingOverlay();
+            
             // Create a set of unique identifiers for existing emails
             // Use multiple fields to catch duplicates: sequence code, ID, or subject+date+from
             const existingEmailKeys = new Set();
@@ -2090,8 +2138,10 @@
                             </div>
                         `;
                         hideMessage();
+                        hideEmailLoadingOverlay();
                     } else if (data.error) {
                         showMessage(`Error: ${escapeHtml(data.error)}`, 'error');
+                        hideEmailLoadingOverlay();
                     } else {
                         const fetchedEmails = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
                         
@@ -2147,10 +2197,12 @@
                         } else {
                             showMessage('No new emails found. All emails are up to date.', 'info');
                         }
+                        hideEmailLoadingOverlay();
                     }
                 })
                 .catch(error => {
                     showMessage(`Error fetching emails: ${escapeHtml(error.message)}`, 'error');
+                    hideEmailLoadingOverlay();
                 });
         }
 
@@ -2162,6 +2214,9 @@
                 showError('Please save QQ settings first in Settings page');
                 return;
             }
+
+            // Show loading overlay
+            showEmailLoadingOverlay();
 
             const emailList = document.getElementById('email-list');
             emailList.innerHTML = '<div class="loading">Loading QQ emails...</div>';
@@ -2194,13 +2249,18 @@
                         cacheEmails('qq', list);
                         displayEmails(list, { provider: 'qq' });
                     }
+                    hideEmailLoadingOverlay();
                 })
                 .catch(error => {
                     emailList.innerHTML = `<div class="message error">Error fetching emails: ${escapeHtml(error.message)}</div>`;
+                    hideEmailLoadingOverlay();
                 });
         }
 
         function fetch163Emails() {
+            // Show loading overlay
+            showEmailLoadingOverlay();
+
             const emailList = document.getElementById('email-list');
             emailList.innerHTML = '<div class="loading">Loading 163.com emails...</div>';
             const cached = loadCachedEmails('163');
@@ -2236,9 +2296,11 @@
                         cacheEmails('163', list);
                         displayEmails(list, { provider: '163' });
                     }
+                    hideEmailLoadingOverlay();
                 })
                 .catch(error => {
                     emailList.innerHTML = `<div class="message error">Error fetching emails: ${escapeHtml(error.message)}</div>`;
+                    hideEmailLoadingOverlay();
                 });
         }
 

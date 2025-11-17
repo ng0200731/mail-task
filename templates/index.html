@@ -1153,6 +1153,10 @@
                     <label for="task-notes">Template</label>
                     <textarea id="task-notes" placeholder="Enter task details..."></textarea>
                 </div>
+                <div class="form-group">
+                    <label>Attachments</label>
+                    <div id="task-attachments" class="attachment-list"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -1170,6 +1174,7 @@
         const taskCustomerInput = document.getElementById('task-customer');
         const taskEmailInput = document.getElementById('task-email');
         const taskSequenceInput = document.getElementById('task-sequence');
+        const taskAttachmentsDiv = document.getElementById('task-attachments');
         const taskCatalogueSelect = document.getElementById('task-catalogue');
         const taskNotesTextarea = document.getElementById('task-notes');
         const customerStatusDiv = document.getElementById('customer-status');
@@ -2581,11 +2586,34 @@
             taskCatalogueSelect.value = 'search';
             taskNotesTextarea.value = '';
 
+            // Display attachments
+            if (taskAttachmentsDiv) {
+                if (Array.isArray(email.attachments) && email.attachments.length > 0) {
+                    taskAttachmentsDiv.innerHTML = email.attachments.map((att, idx) => `
+                        <div class="attachment-row">
+                            <div class="attachment-row-info">
+                                <strong>${escapeHtml(att.filename || `Attachment ${idx + 1}`)}</strong>
+                                <span>${att.content_type || 'application/octet-stream'} • ${formatAttachmentSize(att.size || 0)}</span>
+                            </div>
+                            <a class="form-button" href="data:${att.content_type || 'application/octet-stream'};base64,${att.data}" download="${escapeHtml(att.filename || `attachment-${idx + 1}`)}">
+                                Download
+                            </a>
+                        </div>
+                    `).join('');
+                } else {
+                    taskAttachmentsDiv.innerHTML = '<div style="padding: 10px; color: #666; font-style: italic;">No attachments</div>';
+                }
+            }
+
             taskModal.classList.remove('hidden');
         }
 
         function closeTaskModal() {
             taskModal.classList.add('hidden');
+            // Clear attachments display
+            if (taskAttachmentsDiv) {
+                taskAttachmentsDiv.innerHTML = '';
+            }
         }
 
         function saveCustomer() {

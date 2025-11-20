@@ -1174,22 +1174,57 @@ def customers_endpoint():
 
     data = request.json or {}
     name = (data.get('name') or '').strip()
+    # Support both email_address (new) and email_suffix (old) for backward compatibility
+    email_address = (data.get('email_address') or '').strip()
     suffix = (data.get('email_suffix') or '').strip()
 
     if not name:
         return jsonify({'error': 'Customer name is required'}), 400
-    if not suffix:
-        return jsonify({'error': 'Email suffix is required'}), 400
-    if '@' in suffix:
-        return jsonify({'error': 'Do not include "@" in the email suffix'}), 400
-    if not re.match(r'^[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$', suffix):
-        return jsonify({'error': 'Invalid email suffix format'}), 400
-
-    normalized_suffix = '@' + suffix
+    
+    # If email_address is provided, validate and save full email address
+    if email_address:
+        # Validate email format
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email_address):
+            return jsonify({'error': 'Invalid email address format'}), 400
+        # Save full email address (prefix + suffix)
+        full_email = email_address
+    elif suffix:
+        # Backward compatibility: handle old email_suffix format
+        if '@' in suffix:
+            # If it already contains @, treat as full email
+            full_email = suffix
+        else:
+            # Old format: just domain, convert to @domain format for backward compatibility
+            if not re.match(r'^[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$', suffix):
+                return jsonify({'error': 'Invalid email suffix format'}), 400
+            full_email = '@' + suffix
+    else:
+        return jsonify({'error': 'Email address is required'}), 400
 
     try:
-        customer_id = insert_customer(name, normalized_suffix)
-        return jsonify({'id': customer_id, 'name': name, 'email_suffix': normalized_suffix}), 201
+        customer_id = insert_customer(name, full_email)
+        return jsonify({'id': customer_id, 'name': name, 'email_suffix': full_email}), 201
+    except Exception as exc:
+        return jsonify({'error': f'Database error: {str(exc)}'}), 500
+
+
+@app.route('/api/customers/<int:customer_id>', methods=['DELETE'])
+def delete_customer(customer_id):
+    """Delete a customer by ID"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
+        connection.commit()
+        deleted = cursor.rowcount > 0
+        cursor.close()
+        connection.close()
+        
+        if deleted:
+            return jsonify({'status': 'deleted', 'id': customer_id})
+        else:
+            return jsonify({'error': 'Customer not found'}), 404
     except Exception as exc:
         return jsonify({'error': f'Database error: {str(exc)}'}), 500
 

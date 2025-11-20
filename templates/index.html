@@ -871,8 +871,8 @@
                         <input type="text" id="customer-name" placeholder="Enter customer name">
                     </div>
                     <div class="form-group">
-                        <label for="customer-email-suffix">Email Suffix (e.g. @example.com)</label>
-                        <input type="text" id="customer-email-suffix" placeholder="@example.com">
+                        <label for="customer-email-address">Email Address</label>
+                        <input type="email" id="customer-email-address" placeholder="customer@example.com" pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}">
                     </div>
                     <div class="compose-actions">
                         <button class="form-button" onclick="saveCustomer()">Save Customer</button>
@@ -884,9 +884,10 @@
                     <table class="customer-table">
                         <thead>
                             <tr>
-                                <th style="width: 40%;">Name</th>
-                                <th style="width: 40%;">Email Suffix</th>
-                                <th style="width: 20%;">Created At</th>
+                                <th style="width: 30%;">Name</th>
+                                <th style="width: 35%;">Email Address</th>
+                                <th style="width: 25%;">Created At</th>
+                                <th style="width: 10%;">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="customer-table-body">
@@ -1331,7 +1332,7 @@
         const taskCatalogueSelect = document.getElementById('task-catalogue');
         const taskNotesTextarea = document.getElementById('task-notes');
         const customerStatusDiv = document.getElementById('customer-status');
-        const customerSuffixInput = document.getElementById('customer-email-suffix');
+        const customerEmailAddressInput = document.getElementById('customer-email-address');
         const customerListSection = document.getElementById('customer-list-section');
         const customerTableBody = document.getElementById('customer-table-body');
         const customerEmptyMessage = document.getElementById('customer-empty');
@@ -1522,8 +1523,25 @@
             if (!rawFrom) return null;
             const address = extractEmailAddress(rawFrom);
             if (!address || !address.includes('@')) return null;
-            const suffix = '@' + address.split('@')[1].toLowerCase();
-            return customerCache.find(customer => (customer.email_suffix || '').toLowerCase() === suffix) || null;
+            const addressLower = address.toLowerCase();
+            
+            // Try to find by full email address first (new format)
+            let match = customerCache.find(customer => {
+                const storedEmail = (customer.email_suffix || '').toLowerCase();
+                return storedEmail === addressLower;
+            });
+            
+            if (match) return match;
+            
+            // Fallback: try to find by domain suffix (backward compatibility)
+            const domain = '@' + address.split('@')[1].toLowerCase();
+            match = customerCache.find(customer => {
+                const storedEmail = (customer.email_suffix || '').toLowerCase();
+                // Check if stored email is old format (starts with @) or matches domain
+                return storedEmail === domain || (storedEmail.startsWith('@') && storedEmail === domain);
+            });
+            
+            return match || null;
         }
 
         function fetchStoredEmails(provider) {
@@ -1963,7 +1981,9 @@
         function showReceiveMail() {
             document.getElementById('receive-mail-content').classList.remove('hidden');
             document.getElementById('send-mail-content').classList.add('hidden');
+            document.getElementById('create-customer-content').classList.add('hidden');
             document.getElementById('task-content').classList.add('hidden');
+            document.getElementById('task-list-content').classList.add('hidden');
             document.getElementById('settings-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Receive Mail';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
@@ -1980,7 +2000,9 @@
         function showSend() {
             document.getElementById('receive-mail-content').classList.add('hidden');
             document.getElementById('send-mail-content').classList.remove('hidden');
+            document.getElementById('create-customer-content').classList.add('hidden');
             document.getElementById('task-content').classList.add('hidden');
+            document.getElementById('task-list-content').classList.add('hidden');
             document.getElementById('settings-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Send Email';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
@@ -1994,6 +2016,7 @@
             document.getElementById('send-mail-content').classList.add('hidden');
             document.getElementById('create-customer-content').classList.remove('hidden');
             document.getElementById('task-content').classList.add('hidden');
+            document.getElementById('task-list-content').classList.add('hidden');
             document.getElementById('settings-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Create Customer';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
@@ -2106,35 +2129,42 @@
                 const selectedCustomer = customerCache.find(c => c.email_suffix === selectedEmailSuffix);
                 
                 if (selectedCustomer) {
-                    // Build email address from customer name and email suffix
-                    let emailAddress = '';
-                    const customerName = (selectedCustomer.name || '').trim();
-                    const emailSuffix = (selectedCustomer.email_suffix || '').trim();
+                    // Use the stored email address directly
+                    const storedEmail = (selectedCustomer.email_suffix || '').trim();
                     
-                    if (customerName.includes('@')) {
-                        // If customer name already contains @, use it as email
-                        emailAddress = customerName;
+                    if (storedEmail.includes('@')) {
+                        // If it's a full email address (new format), use it directly
+                        emailInput.value = storedEmail;
                     } else {
-                        // Convert customer name to email username (lowercase, remove spaces and special chars)
-                        let username = customerName
-                            .toLowerCase()
-                            .replace(/\s+/g, '')  // Remove spaces
-                            .replace(/[^a-z0-9._-]/g, '');  // Remove special chars except . _ -
+                        // Backward compatibility: if it's old format without @, build email from name
+                        const customerName = (selectedCustomer.name || '').trim();
+                        let emailAddress = '';
                         
-                        // If username is empty after processing, use a default value
-                        if (!username) {
-                            username = 'customer';
-                        }
-                        
-                        // Combine username with email suffix
-                        if (emailSuffix.startsWith('@')) {
-                            emailAddress = username + emailSuffix;
+                        if (customerName.includes('@')) {
+                            // If customer name already contains @, use it as email
+                            emailAddress = customerName;
                         } else {
-                            emailAddress = username + '@' + emailSuffix;
+                            // Convert customer name to email username (lowercase, remove spaces and special chars)
+                            let username = customerName
+                                .toLowerCase()
+                                .replace(/\s+/g, '')  // Remove spaces
+                                .replace(/[^a-z0-9._-]/g, '');  // Remove special chars except . _ -
+                            
+                            // If username is empty after processing, use a default value
+                            if (!username) {
+                                username = 'customer';
+                            }
+                            
+                            // Combine username with email suffix
+                            if (storedEmail.startsWith('@')) {
+                                emailAddress = username + storedEmail;
+                            } else {
+                                emailAddress = username + '@' + storedEmail;
+                            }
                         }
+                        
+                        emailInput.value = emailAddress;
                     }
-                    
-                    emailInput.value = emailAddress;
                 }
             });
         }
@@ -3389,6 +3419,12 @@
             return type.includes('pdf') || name.endsWith('.pdf');
         }
 
+        function isTextContent(filename, contentType) {
+            const name = (filename || '').toLowerCase();
+            const type = (contentType || '').toLowerCase();
+            return type.startsWith('text/') || /\.(txt|text|log|md|markdown|json|xml|html|htm|css|js|ts|py|java|cpp|c|h|sh|bat|cmd)$/.test(name);
+        }
+
         function renderTaskAttachments(task) {
             const attachments = task.attachments || [];
             if (attachments.length === 0) {
@@ -3399,9 +3435,10 @@
                 const contentType = att.content_type || 'application/octet-stream';
                 const isImage = isImageContent(att.filename, contentType);
                 const isPDF = isPDFContent(att.filename, contentType);
-                const isViewable = Boolean(isImage || isPDF);
+                const isText = isTextContent(att.filename, contentType);
+                const isViewable = Boolean(isImage || isPDF || isText);
                 const viewLink = isViewable
-                    ? `<span class="attachment-view-link" onclick="openTaskListAttachment(${task.id}, ${idx})">${filename}</span>`
+                    ? `<span class="attachment-view-link" onclick="openTaskListAttachment(${task.id}, ${idx})" style="text-decoration: underline; cursor: pointer; color: #0066cc;">${filename}</span>`
                     : `<span>${filename}</span>`;
                 const downloadLink = `<a class="attachment-download-link" href="data:${contentType};base64,${att.data}" download="${escapeHtml(att.filename || `attachment-${idx + 1}`)}">📎</a>`;
                 return `
@@ -3477,6 +3514,7 @@
             
             const isImage = isImageContent(filename, contentType);
             const isPDF = isPDFContent(filename, contentType);
+            const isText = isTextContent(filename, contentType);
             
             previewModalTitle.textContent = filename || 'Preview';
             
@@ -3494,6 +3532,17 @@
                     previewContent = `<iframe src="${objectUrl}" type="${pdfContentType}" style="width: 100%; height: 100%; border: none; display: block; position: absolute; top: 0; left: 0; right: 0; bottom: 0;"></iframe>`;
                 } else {
                     previewContent = `<p>Unable to preview PDF. <a href="${dataUrl}" download="${escapeHtml(filename || 'document.pdf')}">Download PDF</a></p>`;
+                }
+            } else if (isText) {
+                try {
+                    // Decode base64 text content
+                    const textContent = atob(base64Data);
+                    // Escape HTML but preserve line breaks
+                    const escapedText = escapeHtml(textContent).replace(/\n/g, '<br>').replace(/\r/g, '');
+                    previewContent = `<pre style="white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; padding: 15px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; max-height: 80vh; overflow: auto; margin: 0;">${escapedText}</pre>`;
+                } catch (error) {
+                    console.warn('Failed to decode text content:', error);
+                    previewContent = `<p>Unable to preview text file. <a href="${dataUrl}" download="${escapeHtml(filename)}">Download file</a></p>`;
                 }
             } else {
                 previewContent = `<p>Preview not available for this file type. <a href="${dataUrl}" download="${escapeHtml(filename)}">Download file</a></p>`;
@@ -3516,6 +3565,12 @@
                 previewModalContent.style.position = 'relative';
                 previewModalContent.style.width = '100%';
                 previewModalContent.style.height = '100%';
+            } else if (isText) {
+                previewModalContent.style.alignItems = 'flex-start';
+                previewModalContent.style.justifyContent = 'flex-start';
+                previewModalContent.style.overflow = 'auto';
+                previewModalContent.style.cursor = 'default';
+                previewModalContent.style.padding = '20px';
             } else {
                 previewModalContent.style.alignItems = 'center';
                 previewModalContent.style.justifyContent = 'center';
@@ -3626,24 +3681,23 @@
 
         function saveCustomer() {
             const nameInput = document.getElementById('customer-name');
-            const suffixInput = document.getElementById('customer-email-suffix');
+            const emailInput = document.getElementById('customer-email-address');
             const name = (nameInput.value || '').trim();
-            const suffix = (suffixInput.value || '').trim();
+            const emailAddress = (emailInput.value || '').trim();
 
             if (!name) {
                 showCustomerStatus('Customer name is required.', true);
                 return;
             }
-            if (!suffix) {
-                showCustomerStatus('Please enter an email suffix (e.g. example.com).', true);
+            if (!emailAddress) {
+                showCustomerStatus('Please enter an email address.', true);
                 return;
             }
-            if (suffix.includes('@')) {
-                showCustomerStatus('Do not include "@" in the email suffix. Enter only the domain, e.g. example.com.', true);
-                return;
-            }
-            if (!/^[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/.test(suffix)) {
-                showCustomerStatus('Please enter a valid email suffix (e.g. example.com).', true);
+            
+            // Email validation regex
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailRegex.test(emailAddress)) {
+                showCustomerStatus('Please enter a valid email address (e.g. customer@example.com).', true);
                 return;
             }
 
@@ -3656,7 +3710,7 @@
                 },
                 body: JSON.stringify({
                     name,
-                    email_suffix: suffix
+                    email_address: emailAddress
                 })
             })
                 .then(async response => {
@@ -3665,7 +3719,7 @@
                         throw new Error(data.error || 'Failed to save customer');
                     }
                     nameInput.value = '';
-                    suffixInput.value = '';
+                    emailInput.value = '';
                     showCustomerStatus('Customer saved.', false);
                     loadCustomers(false);
                 })
@@ -3690,6 +3744,37 @@
             }, 3000);
         }
 
+        function deleteCustomer(customerId, customerName) {
+            if (!confirm(`Are you sure you want to delete customer "${customerName}"?`)) {
+                return;
+            }
+
+            showCustomerStatus('Deleting customer...', false, 'info');
+
+            fetch(`/api/customers/${customerId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+                .then(async response => {
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to delete customer');
+                    }
+                    showCustomerStatus('Customer deleted successfully.', false);
+                    // Remove from cache
+                    if (customerCache) {
+                        customerCache = customerCache.filter(c => c.id !== customerId);
+                    }
+                    // Reload customer list
+                    loadCustomers(false);
+                })
+                .catch(error => {
+                    showCustomerStatus(`Error: ${error.message}`, true);
+                });
+        }
+
         function renderCustomers(customers) {
             if (!customerListSection || !customerTableBody || !customerEmptyMessage) {
                 return;
@@ -3707,6 +3792,9 @@
                     <td>${escapeHtml(customer.name || '')}</td>
                     <td>${escapeHtml(customer.email_suffix || '')}</td>
                     <td>${escapeHtml(customer.created_at ? new Date(customer.created_at).toLocaleString() : '')}</td>
+                    <td>
+                        <button class="form-button" onclick="deleteCustomer(${customer.id}, '${escapeHtml(customer.name || '')}')" style="padding: 5px 10px; font-size: 12px; cursor: pointer;">Delete</button>
+                    </td>
                 </tr>
             `).join('');
             customerTableBody.innerHTML = rows;

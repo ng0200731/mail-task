@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Receiver - v{{ version }}</title>
+    <!-- Quill.js Rich Text Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     <style>
         * {
             margin: 0;
@@ -649,11 +652,19 @@
         .modal-dialog {
             width: 80vw;
             max-width: 1000px;
-            height: 80vh;
+            max-height: 90vh;
             background-color: #ffffff;
             border: 2px solid #000000;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
+        }
+
+        #email-modal .modal-dialog {
+            width: 80vw;
+            height: 80vh;
+            max-width: none;
+            max-height: 80vh;
         }
 
         .preview-modal-dialog {
@@ -705,6 +716,14 @@
             display: flex;
             flex-direction: column;
             min-height: 0;
+            position: relative;
+        }
+
+        #email-modal .modal-body {
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex: 1;
+            min-height: 0;
         }
 
         .modal-iframe {
@@ -714,12 +733,43 @@
             background-color: #ffffff;
         }
 
+        #email-modal .modal-iframe {
+            width: 100%;
+            min-height: 100%;
+            height: auto;
+            display: block;
+            border: none;
+        }
+        
+        /* Ensure iframe content inside is scrollable */
+        #email-modal-frame {
+            overflow: visible;
+        }
+        
+        /* Style for content inside iframe */
+        #email-modal-frame body {
+            margin: 0;
+            padding: 20px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
         .task-modal-body {
             padding: 20px;
             display: flex;
             flex-direction: column;
             gap: 15px;
-            height: 100%;
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
+        }
+
+        .task-template-cell {
+            max-width: 300px;
+            max-height: 150px;
+            overflow: auto;
+            white-space: normal;
         }
 
         .task-modal-body textarea {
@@ -814,6 +864,122 @@
         .customer-table th {
             background-color: #f0f0f0;
         }
+
+        #customer-remark.empty:before {
+            content: attr(data-placeholder);
+            color: #999;
+            pointer-events: none;
+        }
+
+        #customer-remark:focus {
+            outline: 2px solid #000000;
+        }
+
+        .customer-table td a {
+            color: #0066cc;
+            text-decoration: underline;
+        }
+
+        .customer-table td a:hover {
+            color: #004499;
+        }
+
+        .country-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: #ffffff;
+            border: 1px solid #000000;
+            border-top: none;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .country-dropdown-item {
+            padding: 8px 10px;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .country-dropdown-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .country-dropdown-item.selected {
+            background-color: #e0e0e0;
+        }
+
+        .attachment-drop-area {
+            border: 2px dashed #000000;
+            border-radius: 4px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #f9f9f9;
+            transition: background-color 0.3s, border-color 0.3s;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .attachment-drop-area:hover {
+            background-color: #f0f0f0;
+        }
+
+        .attachment-drop-area.drag-over {
+            background-color: #e8f4f8;
+            border-color: #0066cc;
+        }
+
+        .attachment-drop-content {
+            pointer-events: none;
+        }
+
+        .attachment-list {
+            margin-top: 10px;
+        }
+
+        .attachment-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin-bottom: 5px;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+        }
+
+        .attachment-item-name {
+            flex: 1;
+            margin-right: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .attachment-item-size {
+            color: #666;
+            margin-right: 10px;
+        }
+
+        .attachment-item-remove {
+            cursor: pointer;
+            color: #cc0000;
+            font-weight: bold;
+            padding: 2px 6px;
+        }
+
+        .attachment-item-remove:hover {
+            background-color: #ffcccc;
+        }
     </style>
 </head>
 <body>
@@ -874,6 +1040,39 @@
                         <label for="customer-email-address">Email Address</label>
                         <input type="email" id="customer-email-address" placeholder="customer@example.com" pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}">
                     </div>
+                    <div class="form-group">
+                        <label for="customer-country">Country</label>
+                        <div style="position: relative;">
+                            <input type="text" id="customer-country" placeholder="Search or select country" autocomplete="off" oninput="filterCountries()" onfocus="showCountryDropdown()" onblur="setTimeout(() => hideCountryDropdown(), 200)">
+                            <div id="country-dropdown" class="country-dropdown hidden"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="customer-website">Website (Optional)</label>
+                        <input type="url" id="customer-website" placeholder="https://example.com (optional)">
+                    </div>
+                    <div class="form-group">
+                        <label>Attachments (Drag & Drop or Click to Select)</label>
+                        <div id="customer-attachment-area" class="attachment-drop-area" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="document.getElementById('customer-attachment-input').click()">
+                            <div class="attachment-drop-content">
+                                <div style="font-size: 24px; margin-bottom: 10px;">📎</div>
+                                <div>Drag and drop files here or click to select</div>
+                                <div style="font-size: 12px; color: #666; margin-top: 5px;">Multiple files supported</div>
+                            </div>
+                            <input type="file" id="customer-attachment-input" multiple style="display: none;" onchange="handleAttachmentSelect(event)">
+                        </div>
+                        <div id="customer-attachment-list" class="attachment-list"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="customer-remark">Remark (Rich HTML)</label>
+                        <div id="customer-remark" contenteditable="true" style="min-height: 100px; border: 1px solid #000000; padding: 8px; font-family: Arial, sans-serif; font-size: 14px; background-color: #ffffff; overflow-y: auto;" data-placeholder="Enter remarks with HTML formatting..."></div>
+                        <div style="margin-top: 5px; font-size: 12px; color: #666;">
+                            <button type="button" onclick="formatText('bold')" style="padding: 3px 8px; margin-right: 5px; font-size: 11px;">Bold</button>
+                            <button type="button" onclick="formatText('italic')" style="padding: 3px 8px; margin-right: 5px; font-size: 11px;">Italic</button>
+                            <button type="button" onclick="formatText('underline')" style="padding: 3px 8px; margin-right: 5px; font-size: 11px;">Underline</button>
+                            <button type="button" onclick="formatText('insertUnorderedList')" style="padding: 3px 8px; margin-right: 5px; font-size: 11px;">List</button>
+                        </div>
+                    </div>
                     <div class="compose-actions">
                         <button class="form-button" onclick="saveCustomer()">Save Customer</button>
                         <div id="customer-status" class="message info hidden"></div>
@@ -884,9 +1083,13 @@
                     <table class="customer-table">
                         <thead>
                             <tr>
-                                <th style="width: 30%;">Name</th>
-                                <th style="width: 35%;">Email Address</th>
-                                <th style="width: 25%;">Created At</th>
+                                <th style="width: 12%;">Name</th>
+                                <th style="width: 15%;">Email Address</th>
+                                <th style="width: 10%;">Country</th>
+                                <th style="width: 12%;">Website</th>
+                                <th style="width: 15%;">Remark</th>
+                                <th style="width: 12%;">Attachments</th>
+                                <th style="width: 12%;">Created At</th>
                                 <th style="width: 10%;">Actions</th>
                             </tr>
                         </thead>
@@ -988,23 +1191,103 @@
                     </div>
 
                     <div class="settings-section" style="margin-top: 30px; background-color: #f9f9f9; padding: 20px; border: 2px solid #000000;">
-                        <h3 style="font-family: Arial, sans-serif; font-size: 18px; color: #000000; margin-bottom: 15px; border-bottom: 1px solid #000000; padding-bottom: 10px;">Gmail API OAuth 2.0 (Required for Attachments)</h3>
+                        <h3 style="font-family: Arial, sans-serif; font-size: 18px; color: #000000; margin-bottom: 15px; border-bottom: 1px solid #000000; padding-bottom: 10px;">Gmail API OAuth 2.0 (Required for Fetching Emails)</h3>
                         
-                        <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 15px; margin-bottom: 20px; font-family: Arial, sans-serif; font-size: 13px;">
-                            <strong>📋 Quick Setup Guide (5 minutes):</strong>
-                            <ol style="margin: 10px 0; padding-left: 20px;">
-                                <li style="margin: 5px 0;">Click this link: <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color: #0066cc;">Open Google Cloud Console</a></li>
-                                <li style="margin: 5px 0;">At the top, click <strong>"+ CREATE CREDENTIALS"</strong> → Select <strong>"OAuth client ID"</strong></li>
-                                <li style="margin: 5px 0;">If asked, choose <strong>"Web application"</strong> as the type</li>
-                                <li style="margin: 5px 0;">Name it: <code>Mail Task App</code></li>
-                                <li style="margin: 5px 0;">Under "Authorized redirect URIs", click <strong>"+ ADD URI"</strong> and paste: <code style="background: #f0f0f0; padding: 2px 5px;">http://localhost:5000/oauth2callback</code></li>
-                                <li style="margin: 5px 0;">Click <strong>"CREATE"</strong></li>
-                                <li style="margin: 5px 0;">Copy the <strong>Client ID</strong> (long string ending in .apps.googleusercontent.com)</li>
-                                <li style="margin: 5px 0;">Copy the <strong>Client Secret</strong> (shorter string)</li>
-                                <li style="margin: 5px 0;">Paste them in the fields below</li>
-                                <li style="margin: 5px 0;">Click <strong>"Save Profile"</strong> then <strong>"Authenticate Gmail"</strong></li>
-                            </ol>
-                            <p style="margin: 10px 0 0 0; color: #856404;"><strong>Note:</strong> If you see "OAuth consent screen" error, click "CONFIGURE CONSENT SCREEN" first, choose "External", fill in app name and your email, then continue. <strong>After creating the OAuth client, you MUST add yourself as a test user in the OAuth consent screen!</strong></p>
+                        <div style="background-color: #e7f3ff; border: 2px solid #0066cc; padding: 20px; margin-bottom: 20px; font-family: Arial, sans-serif; font-size: 14px; border-radius: 4px;">
+                            <h4 style="color: #0066cc; margin-top: 0; margin-bottom: 15px; font-size: 16px;">📖 Step-by-Step Guide to Get Gmail OAuth Credentials</h4>
+                            
+                            <div style="background-color: #ffffff; padding: 15px; margin-bottom: 15px; border: 1px solid #0066cc; border-radius: 4px;">
+                                <strong style="color: #0066cc;">Step 1: Open Google Cloud Console</strong>
+                                <p style="margin: 5px 0;">Click this button to open the credentials page:</p>
+                                <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #0066cc; color: white; text-decoration: none; border-radius: 4px; margin-top: 10px; font-weight: bold;">🔗 Open Google Cloud Console</a>
+                                <p style="margin: 10px 0 0 0; font-size: 12px; color: #666;">(This will open in a new tab. Keep this page open!)</p>
+                            </div>
+
+                            <div style="background-color: #ffffff; padding: 15px; margin-bottom: 15px; border: 1px solid #0066cc; border-radius: 4px;">
+                                <strong style="color: #0066cc;">Step 2: Create a New Project (if you don't have one)</strong>
+                                <ol style="margin: 5px 0; padding-left: 20px; font-size: 13px;">
+                                    <li>At the top of the page, click the project dropdown (next to "Google Cloud")</li>
+                                    <li>Click <strong>"NEW PROJECT"</strong></li>
+                                    <li>Enter project name: <code style="background: #f0f0f0; padding: 2px 5px;">Mail Task</code></li>
+                                    <li>Click <strong>"CREATE"</strong></li>
+                                    <li>Wait a few seconds, then select your new project from the dropdown</li>
+                                </ol>
+                            </div>
+
+                            <div style="background-color: #ffffff; padding: 15px; margin-bottom: 15px; border: 1px solid #0066cc; border-radius: 4px;">
+                                <strong style="color: #0066cc;">Step 3: Enable Gmail API</strong>
+                                <ol style="margin: 5px 0; padding-left: 20px; font-size: 13px;">
+                                    <li>In the left menu, click <strong>"APIs & Services"</strong> → <strong>"Library"</strong></li>
+                                    <li>Search for <strong>"Gmail API"</strong></li>
+                                    <li>Click on <strong>"Gmail API"</strong></li>
+                                    <li>Click the blue <strong>"ENABLE"</strong> button</li>
+                                    <li>Wait for it to enable (takes a few seconds)</li>
+                                </ol>
+                            </div>
+
+                            <div style="background-color: #ffffff; padding: 15px; margin-bottom: 15px; border: 1px solid #0066cc; border-radius: 4px;">
+                                <strong style="color: #0066cc;">Step 4: Configure OAuth Consent Screen (First Time Only)</strong>
+                                <ol style="margin: 5px 0; padding-left: 20px; font-size: 13px;">
+                                    <li>Go to <strong>"APIs & Services"</strong> → <strong>"OAuth consent screen"</strong> (in left menu)</li>
+                                    <li>Select <strong>"External"</strong> → Click <strong>"CREATE"</strong></li>
+                                    <li><strong>App name:</strong> Enter <code style="background: #f0f0f0; padding: 2px 5px;">Mail Task</code></li>
+                                    <li><strong>User support email:</strong> Select your email</li>
+                                    <li><strong>Developer contact:</strong> Enter your email</li>
+                                    <li>Click <strong>"SAVE AND CONTINUE"</strong></li>
+                                    <li>On "Scopes" page, click <strong>"SAVE AND CONTINUE"</strong> (no need to add scopes)</li>
+                                    <li>On "Test users" page, click <strong>"+ ADD USERS"</strong></li>
+                                    <li>Enter <strong>YOUR Gmail address</strong> (the one you want to fetch emails from)</li>
+                                    <li>Click <strong>"ADD"</strong> → Click <strong>"SAVE AND CONTINUE"</strong></li>
+                                    <li>Review and click <strong>"BACK TO DASHBOARD"</strong></li>
+                                </ol>
+                                <p style="margin: 10px 0 0 0; padding: 10px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; font-size: 12px;">
+                                    <strong>⚠️ Important:</strong> You MUST add yourself as a test user, otherwise authentication will fail!
+                                </p>
+                            </div>
+
+                            <div style="background-color: #ffffff; padding: 15px; margin-bottom: 15px; border: 1px solid #0066cc; border-radius: 4px;">
+                                <strong style="color: #0066cc;">Step 5: Create OAuth Client ID</strong>
+                                <ol style="margin: 5px 0; padding-left: 20px; font-size: 13px;">
+                                    <li>Go to <strong>"APIs & Services"</strong> → <strong>"Credentials"</strong> (in left menu)</li>
+                                    <li>At the top, click <strong>"+ CREATE CREDENTIALS"</strong></li>
+                                    <li>Select <strong>"OAuth client ID"</strong></li>
+                                    <li>If you see "Application type", select <strong>"Web application"</strong></li>
+                                    <li><strong>Name:</strong> Enter <code style="background: #f0f0f0; padding: 2px 5px;">Mail Task App</code></li>
+                                    <li>Under <strong>"Authorized redirect URIs"</strong>, click <strong>"+ ADD URI"</strong></li>
+                                    <li>Paste this exact URL: <code style="background: #f0f0f0; padding: 2px 5px; font-weight: bold;">http://localhost:5000/oauth2callback</code></li>
+                                    <li>Click <strong>"CREATE"</strong></li>
+                                </ol>
+                            </div>
+
+                            <div style="background-color: #ffffff; padding: 15px; margin-bottom: 15px; border: 1px solid #0066cc; border-radius: 4px;">
+                                <strong style="color: #0066cc;">Step 6: Copy Your Credentials</strong>
+                                <p style="margin: 5px 0;">After clicking "CREATE", a popup will appear with your credentials:</p>
+                                <ol style="margin: 5px 0; padding-left: 20px; font-size: 13px;">
+                                    <li><strong>Client ID:</strong> A long string ending in <code style="background: #f0f0f0; padding: 2px 5px;">.apps.googleusercontent.com</code>
+                                        <br><span style="color: #666; font-size: 12px;">Example: 123456789-abcdefghijklmnop.apps.googleusercontent.com</span></li>
+                                    <li><strong>Client Secret:</strong> A shorter string starting with <code style="background: #f0f0f0; padding: 2px 5px;">GOCSPX-</code>
+                                        <br><span style="color: #666; font-size: 12px;">Example: GOCSPX-abcdefghijklmnopqrstuvwxyz</span></li>
+                                    <li>Click the <strong>copy icon</strong> next to each one, or select and copy manually</li>
+                                    <li>Click <strong>"OK"</strong> to close the popup</li>
+                                </ol>
+                                <p style="margin: 10px 0 0 0; padding: 10px; background-color: #f8d7da; border: 1px solid #dc3545; border-radius: 4px; font-size: 12px;">
+                                    <strong>⚠️ Important:</strong> You can only see the Client Secret ONCE! Copy it now or you'll need to create a new one.
+                                </p>
+                            </div>
+
+                            <div style="background-color: #ffffff; padding: 15px; margin-bottom: 15px; border: 1px solid #0066cc; border-radius: 4px;">
+                                <strong style="color: #0066cc;">Step 7: Paste Credentials Below</strong>
+                                <p style="margin: 5px 0;">Now paste the Client ID and Client Secret into the fields below, then:</p>
+                                <ol style="margin: 5px 0; padding-left: 20px; font-size: 13px;">
+                                    <li>Click <strong>"Save Profile"</strong> button (at the bottom of this page)</li>
+                                    <li>Click <strong>"🔐 Authenticate Gmail"</strong> button</li>
+                                    <li>A new window will open - sign in with your Gmail account</li>
+                                    <li>Click <strong>"Allow"</strong> to grant permissions</li>
+                                    <li>The window will close automatically</li>
+                                    <li>You're done! Try fetching emails now.</li>
+                                </ol>
+                            </div>
+
                             <div style="margin-top: 15px; padding: 10px; background-color: #f8d7da; border: 1px solid #dc3545; border-radius: 4px;">
                                 <strong style="color: #721c24;">⚠️ IMPORTANT: You Need a "Web Application" OAuth Client!</strong>
                                 <p style="margin: 5px 0; font-size: 12px;">I see you have a "Desktop client 1" (Type: Desktop). We need a <strong>"Web application"</strong> type instead.</p>
@@ -1281,25 +1564,27 @@
                         <input type="text" id="task-sequence" readonly>
                     </div>
                     <div class="form-group">
-                        <label for="task-customer">Selected Customer</label>
-                        <input type="text" id="task-customer" readonly>
+                        <label for="task-customer-select">Selected Customer</label>
+                        <select id="task-customer-select" style="width: 100%; padding: 8px; border: 1px solid #000000;">
+                            <option value="">-- Select Customer --</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="task-email">Email</label>
-                        <input type="text" id="task-email" readonly>
+                        <input type="email" id="task-email" style="width: 100%; padding: 8px; border: 1px solid #000000;">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="task-catalogue">Catalogue</label>
+                    <label for="task-catalogue">Type</label>
                     <select id="task-catalogue">
-                        <option value="search">Search Material</option>
-                        <option value="quotation">Quotation</option>
-                        <option value="other">Other</option>
+                        <option value="need sample">need sample</option>
+                        <option value="quotation">quotation</option>
+                        <option value="outsource">outsource</option>
                     </select>
                 </div>
                 <div class="form-group" style="flex: 1; display: flex; flex-direction: column;">
                     <label for="task-notes">Template</label>
-                    <textarea id="task-notes" placeholder="Enter task details..."></textarea>
+                    <div id="task-notes-editor" style="height: 300px; background-color: #ffffff;"></div>
                 </div>
                 <div class="form-group">
                     <label>Attachments</label>
@@ -1325,12 +1610,33 @@
         const previewModalTitle = document.getElementById('preview-modal-title');
         const previewModalContent = document.getElementById('preview-modal-content');
         const taskModal = document.getElementById('task-modal');
-        const taskCustomerInput = document.getElementById('task-customer');
+        const taskCustomerSelect = document.getElementById('task-customer-select');
         const taskEmailInput = document.getElementById('task-email');
         const taskSequenceInput = document.getElementById('task-sequence');
         const taskAttachmentsDiv = document.getElementById('task-attachments');
         const taskCatalogueSelect = document.getElementById('task-catalogue');
-        const taskNotesTextarea = document.getElementById('task-notes');
+        const taskNotesEditorDiv = document.getElementById('task-notes-editor');
+        
+        // Initialize Quill editor for task modal
+        let taskNotesEditor = null;
+        if (taskNotesEditorDiv) {
+            taskNotesEditor = new Quill('#task-notes-editor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'script': 'sub'}, { 'script': 'super' }],
+                        [{ 'indent': '-1'}, { 'indent': '+1' }],
+                        [{ 'align': [] }],
+                        ['link', 'image'],
+                        [{ 'table': true }],
+                        ['clean']
+                    ]
+                }
+            });
+        }
         const customerStatusDiv = document.getElementById('customer-status');
         const customerEmailAddressInput = document.getElementById('customer-email-address');
         const customerListSection = document.getElementById('customer-list-section');
@@ -1340,6 +1646,31 @@
         let currentProvider = null;
         let customerCache = [];
         let currentPreviewObjectUrl = null;
+        let customerAttachments = [];
+
+        // Country list
+        const COUNTRIES = [
+            'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Antigua and Barbuda', 'Argentina', 'Armenia', 'Australia', 'Austria',
+            'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan',
+            'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso', 'Burundi', 'Cabo Verde', 'Cambodia',
+            'Cameroon', 'Canada', 'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo', 'Costa Rica',
+            'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic', 'Ecuador', 'Egypt',
+            'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon',
+            'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana',
+            'Haiti', 'Honduras', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel',
+            'Italy', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kiribati', 'Korea, North', 'Korea, South', 'Kuwait',
+            'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg',
+            'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Mauritania', 'Mauritius', 'Mexico',
+            'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nauru',
+            'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Macedonia', 'Norway', 'Oman', 'Pakistan',
+            'Palau', 'Palestine', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar',
+            'Romania', 'Russia', 'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe', 'Saudi Arabia',
+            'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa',
+            'South Sudan', 'Spain', 'Sri Lanka', 'Sudan', 'Suriname', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan',
+            'Tanzania', 'Thailand', 'Timor-Leste', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu',
+            'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Vatican City', 'Venezuela',
+            'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe'
+        ].sort();
         const PROVIDER_LABELS = {
             gmail: 'Gmail',
             qq: 'QQ',
@@ -1500,6 +1831,63 @@
             }
         }
 
+        function deduplicateEmails(emails) {
+            if (!Array.isArray(emails) || emails.length === 0) return [];
+            
+            const seenKeys = new Set();
+            const uniqueEmails = [];
+            
+            emails.forEach(email => {
+                const emailObj = ensureEmailSequence({ ...email });
+                let isDuplicate = false;
+                
+                // Check by ID first
+                const id = (emailObj.id || emailObj.email_uid || '').trim();
+                if (id) {
+                    const idKey = `id:${id}`;
+                    if (seenKeys.has(idKey)) {
+                        isDuplicate = true;
+                    } else {
+                        seenKeys.add(idKey);
+                    }
+                }
+                
+                // Check by sequence if no ID or ID not found
+                if (!isDuplicate) {
+                    const sequence = (emailObj.sequence || '').trim();
+                    if (sequence) {
+                        const seqKey = `seq:${sequence}`;
+                        if (seenKeys.has(seqKey)) {
+                            isDuplicate = true;
+                        } else {
+                            seenKeys.add(seqKey);
+                        }
+                    }
+                }
+                
+                // Check by fallback key (subject+date+from)
+                if (!isDuplicate) {
+                    const subject = (emailObj.subject || '').trim();
+                    const date = (emailObj.date || '').trim();
+                    const from = (emailObj.from || '').trim();
+                    if (subject && date && from) {
+                        const fallbackKey = `key:${subject}|${date}|${from}`;
+                        if (seenKeys.has(fallbackKey)) {
+                            isDuplicate = true;
+                        } else {
+                            seenKeys.add(fallbackKey);
+                        }
+                    }
+                }
+                
+                if (!isDuplicate) {
+                    uniqueEmails.push(emailObj);
+                }
+            });
+            
+            return uniqueEmails;
+        }
+
         function updateContentTitle(provider, cached = false) {
             const titleEl = document.getElementById('content-title');
             if (!titleEl) return;
@@ -1513,7 +1901,8 @@
         function renderCachedEmailsFor(provider) {
             const cached = loadCachedEmails(provider);
             if (cached && Array.isArray(cached)) {
-                displayEmails(cached, { provider, cached: true });
+                const uniqueCached = deduplicateEmails(cached);
+                displayEmails(uniqueCached, { provider, cached: true });
                 return true;
             }
             return false;
@@ -1548,7 +1937,8 @@
             if (!provider) {
                 return Promise.resolve([]);
             }
-            return fetch(`/api/emails?provider=${encodeURIComponent(provider)}`)
+            const daysToLoad = 2; // fetch emails from the past 2 days by default
+            return fetch(`/api/emails?provider=${encodeURIComponent(provider)}&days=${daysToLoad}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
@@ -1942,6 +2332,32 @@
             }
         }
 
+        // Handle placeholder for contenteditable div
+        function setupRemarkPlaceholder() {
+            const remarkDiv = document.getElementById('customer-remark');
+            if (!remarkDiv) return;
+            
+            const placeholder = remarkDiv.getAttribute('data-placeholder') || 'Enter remarks with HTML formatting...';
+            
+            function updatePlaceholder() {
+                if (remarkDiv.innerHTML.trim() === '' || remarkDiv.textContent.trim() === '') {
+                    remarkDiv.classList.add('empty');
+                } else {
+                    remarkDiv.classList.remove('empty');
+                }
+            }
+            
+            remarkDiv.addEventListener('focus', function() {
+                if (remarkDiv.innerHTML.trim() === '' || remarkDiv.textContent.trim() === '') {
+                    remarkDiv.classList.remove('empty');
+                }
+            });
+            
+            remarkDiv.addEventListener('blur', updatePlaceholder);
+            remarkDiv.addEventListener('input', updatePlaceholder);
+            updatePlaceholder();
+        }
+
         // Load settings on page load
         window.onload = async function() {
             initializeProfile1();
@@ -1950,6 +2366,7 @@
             }
             showProfileList();
             updateComposeDefaults();
+            setupRemarkPlaceholder();
             await loadCustomers(false);
             await saveYesterdayEmailsToSQLite();
             await loadCachedEmailsOnStartup();
@@ -2077,16 +2494,17 @@
                             </div>
                         </div>
                         <div class="form-group" style="margin-bottom: 15px;">
-                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Catalogue</label>
+                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Type</label>
                             <select id="task-form-catalogue" required style="width: 100%; padding: 8px; border: 1px solid #000000;">
-                                <option value="">-- Select Catalogue --</option>
-                                <option value="quotation">Quotation</option>
-                                <option value="sourcing">Sourcing</option>
+                                <option value="">-- Select Type --</option>
+                                <option value="need sample">need sample</option>
+                                <option value="quotation">quotation</option>
+                                <option value="outsource">outsource</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Template</label>
-                            <textarea id="task-form-template" required style="width: 100%; min-height: 100px; padding: 8px; border: 1px solid #000000; font-family: Arial, sans-serif;" placeholder="Enter task details..."></textarea>
+                            <div id="task-form-template-editor" style="height: 300px; background-color: #ffffff;"></div>
                         </div>
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Attachments</label>
@@ -2108,6 +2526,38 @@
             
             // Setup customer selection change handler
             setupCustomerEmailAutoFill();
+            
+            // Initialize Quill editor for task form (after DOM is ready)
+            setTimeout(() => {
+                const taskFormEditorDiv = document.getElementById('task-form-template-editor');
+                if (taskFormEditorDiv) {
+                    // Destroy existing editor if it exists
+                    if (window.taskFormEditor) {
+                        try {
+                            window.taskFormEditor = null;
+                        } catch (e) {
+                            console.warn('Error destroying existing editor:', e);
+                        }
+                    }
+                    // Create new editor
+                    window.taskFormEditor = new Quill('#task-form-template-editor', {
+                        theme: 'snow',
+                        modules: {
+                            toolbar: [
+                                [{ 'header': [1, 2, 3, false] }],
+                                ['bold', 'italic', 'underline', 'strike'],
+                                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                                [{ 'script': 'sub'}, { 'script': 'super' }],
+                                [{ 'indent': '-1'}, { 'indent': '+1' }],
+                                [{ 'align': [] }],
+                                ['link', 'image'],
+                                [{ 'table': true }],
+                                ['clean']
+                            ]
+                        }
+                    });
+                }
+            }, 100);
         }
         
         function setupCustomerEmailAutoFill() {
@@ -2276,17 +2726,21 @@
             const customerSelect = document.getElementById('task-form-customer');
             const emailInput = document.getElementById('task-form-email');
             const catalogueSelect = document.getElementById('task-form-catalogue');
-            const templateTextarea = document.getElementById('task-form-template');
             
-            if (!customerSelect || !emailInput || !catalogueSelect || !templateTextarea) {
+            if (!customerSelect || !emailInput || !catalogueSelect) {
                 alert('Form fields not found');
                 return;
+            }
+            
+            // Get content from Quill editor
+            let template = '';
+            if (window.taskFormEditor) {
+                template = window.taskFormEditor.root.innerHTML;
             }
             
             const customer = customerSelect.value;
             const email = emailInput.value.trim();
             const catalogue = catalogueSelect.value;
-            const template = templateTextarea.value.trim();
             
             if (!customer) {
                 alert('Please select a customer');
@@ -2299,11 +2753,11 @@
             }
             
             if (!catalogue) {
-                alert('Please select a catalogue');
+                alert('Please select a type');
                 return;
             }
             
-            if (!template) {
+            if (!template || template.trim() === '' || template === '<p><br></p>') {
                 alert('Please enter template content');
                 return;
             }
@@ -2622,7 +3076,8 @@
             if (existingCount === 0) {
                 const cached = loadCachedEmails('gmail');
                 if (cached && Array.isArray(cached) && cached.length > 0) {
-                    displayEmails(cached, { provider: 'gmail', cached: true });
+                    const uniqueCached = deduplicateEmails(cached);
+                    displayEmails(uniqueCached, { provider: 'gmail', cached: true });
                     // Update existing keys after displaying cached emails
                     currentEmails.forEach(email => {
                         const emailObj = ensureEmailSequence({ ...email });
@@ -2631,12 +3086,13 @@
                 }
             }
             
+            const gmailDaysBack = 1; // fetch today + previous day
             fetch('/api/fetch-gmail', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ limit: 50 })
+                body: JSON.stringify({ limit: 50, days_back: gmailDaysBack })
             })
                 .then(async response => {
                     const data = await response.json();
@@ -2658,7 +3114,21 @@
                         hideMessage();
                         hideEmailLoadingOverlay();
                     } else if (data.error) {
-                        showMessage(`Error: ${escapeHtml(data.error)}`, 'error');
+                        // Check if authentication is needed
+                        if (data.needs_auth) {
+                            emailList.innerHTML = `
+                                <div class="message error" style="white-space: pre-line;">
+                                    <p><strong>Gmail Authentication Required</strong></p>
+                                    <p>${escapeHtml(data.error)}</p>
+                                    <div style="margin-top: 15px;">
+                                        <button class="form-button" onclick="showSettings(); setTimeout(() => { const detail = document.getElementById('profile-detail-view'); if (detail && !detail.classList.contains('hidden')) { detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 500);" style="margin-right: 10px;">Go to Settings</button>
+                                        <button class="form-button" onclick="authenticateGmail()">Re-authenticate Gmail</button>
+                                    </div>
+                                </div>
+                            `;
+                    } else {
+                            showMessage(`Error: ${escapeHtml(data.error)}`, 'error');
+                        }
                         hideEmailLoadingOverlay();
                     } else {
                         const fetchedEmails = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
@@ -2696,18 +3166,21 @@
                         // Merge new emails with existing ones
                         const mergedEmails = [...currentEmails, ...newEmails];
                         
+                        // Deduplicate the merged list to remove any duplicates
+                        const uniqueEmails = deduplicateEmails(mergedEmails);
+                        
                         // Sort by date (newest first)
-                        mergedEmails.sort((a, b) => {
+                        uniqueEmails.sort((a, b) => {
                             const dateA = new Date(a.date || 0);
                             const dateB = new Date(b.date || 0);
                             return dateB - dateA;
                         });
                         
-                        // Update cache with all emails
-                        cacheEmails('gmail', mergedEmails);
+                        // Update cache with deduplicated emails
+                        cacheEmails('gmail', uniqueEmails);
                         
-                        // Display merged emails
-                        displayEmails(mergedEmails, { provider: 'gmail' });
+                        // Display deduplicated emails
+                        displayEmails(uniqueEmails, { provider: 'gmail' });
                         
                         // Show result message
                         if (newEmails.length > 0) {
@@ -2740,7 +3213,8 @@
             emailList.innerHTML = '<div class="loading">Loading QQ emails...</div>';
             const cached = loadCachedEmails('qq');
             if (cached && Array.isArray(cached)) {
-                displayEmails(cached, { provider: 'qq', cached: true });
+                const uniqueCached = deduplicateEmails(cached);
+                displayEmails(uniqueCached, { provider: 'qq', cached: true });
             }
             
             fetch('/api/fetch-qq', {
@@ -2764,8 +3238,9 @@
                         emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
                     } else {
                         const list = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
-                        cacheEmails('qq', list);
-                        displayEmails(list, { provider: 'qq' });
+                        const uniqueList = deduplicateEmails(list);
+                        cacheEmails('qq', uniqueList);
+                        displayEmails(uniqueList, { provider: 'qq' });
                     }
                     hideEmailLoadingOverlay();
                 })
@@ -2783,7 +3258,8 @@
             emailList.innerHTML = '<div class="loading">Loading 163.com emails...</div>';
             const cached = loadCachedEmails('163');
             if (cached && Array.isArray(cached)) {
-                displayEmails(cached, { provider: '163', cached: true });
+                const uniqueCached = deduplicateEmails(cached);
+                displayEmails(uniqueCached, { provider: '163', cached: true });
             }
             
             const profile = getCurrentProfile();
@@ -2811,8 +3287,9 @@
                         emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
                     } else {
                         const list = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
-                        cacheEmails('163', list);
-                        displayEmails(list, { provider: '163' });
+                        const uniqueList = deduplicateEmails(list);
+                        cacheEmails('163', uniqueList);
+                        displayEmails(uniqueList, { provider: '163' });
                     }
                     hideEmailLoadingOverlay();
                 })
@@ -3030,10 +3507,53 @@
             emailModalMeta.textContent = metaLines.join('\n');
 
             if (email.html_body) {
-                emailModalFrame.srcdoc = email.html_body;
+                // Wrap HTML content with proper styling for scrolling
+                emailModalFrame.srcdoc = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <style>
+                            body {
+                                margin: 0;
+                                padding: 20px;
+                                font-family: Arial, sans-serif;
+                                overflow-y: auto;
+                                overflow-x: hidden;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        ${email.html_body}
+                    </body>
+                    </html>
+                `;
             } else {
                 const plain = email.plain_body || '';
-                emailModalFrame.srcdoc = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${escapeHtml(plain)}</pre>`;
+                emailModalFrame.srcdoc = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <style>
+                            body {
+                                margin: 0;
+                                padding: 20px;
+                                font-family: Arial, sans-serif;
+                                overflow-y: auto;
+                                overflow-x: hidden;
+                            }
+                            pre {
+                                white-space: pre-wrap;
+                                word-wrap: break-word;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <pre>${escapeHtml(plain)}</pre>
+                    </body>
+                    </html>
+                `;
             }
 
             emailModal.classList.remove('hidden');
@@ -3080,24 +3600,77 @@
                 return;
             }
 
-            const setCustomerField = () => {
+            // Populate customer dropdown
+            const populateCustomerDropdown = () => {
+                if (!taskCustomerSelect) return;
+                
+                // Clear existing options except the first one
+                taskCustomerSelect.innerHTML = '<option value="">-- Select Customer --</option>';
+                
+                // Add customers from cache
+                if (customerCache && customerCache.length > 0) {
+                    customerCache.forEach(customer => {
+                        const option = document.createElement('option');
+                        option.value = customer.email_suffix || '';
+                        option.textContent = customer.name || customer.email_suffix || '';
+                        taskCustomerSelect.appendChild(option);
+                    });
+                }
+                
+                // Try to find and select matching customer
                 const match = findCustomerByEmail(email.from || '');
                 if (match) {
-                    taskCustomerInput.value = match.name || match.email_suffix || '';
+                    taskCustomerSelect.value = match.email_suffix || '';
+                    // Auto-fill email
+                    const storedEmail = (match.email_suffix || '').trim();
+                    if (storedEmail.includes('@')) {
+                        taskEmailInput.value = storedEmail;
+                    } else {
+                        taskEmailInput.value = extractEmailAddress(email.from || '');
+                    }
                 } else {
-                    taskCustomerInput.value = 'Not in customer list';
+                    taskCustomerSelect.value = '';
+                    taskEmailInput.value = extractEmailAddress(email.from || '');
                 }
             };
 
-            setCustomerField();
+            // Load customers if needed
             if (!customerCache || customerCache.length === 0) {
-                loadCustomers(false).then(() => setCustomerField()).catch(() => {});
+                loadCustomers(false).then(() => populateCustomerDropdown()).catch(() => {
+                    populateCustomerDropdown();
+                });
+            } else {
+                populateCustomerDropdown();
             }
 
-            taskEmailInput.value = extractEmailAddress(email.from || '');
+            // Setup customer selection change handler
+            if (taskCustomerSelect) {
+                taskCustomerSelect.onchange = function() {
+                    const selectedEmailSuffix = this.value;
+                    if (!selectedEmailSuffix) {
+                        taskEmailInput.value = extractEmailAddress(email.from || '');
+                        return;
+                    }
+                    
+                    const selectedCustomer = customerCache.find(c => c.email_suffix === selectedEmailSuffix);
+                    if (selectedCustomer) {
+                        const storedEmail = (selectedCustomer.email_suffix || '').trim();
+                        if (storedEmail.includes('@')) {
+                            taskEmailInput.value = storedEmail;
+                        } else {
+                            taskEmailInput.value = extractEmailAddress(email.from || '');
+                        }
+                    }
+                };
+            }
+
             taskSequenceInput.value = email.sequence || 'N/A';
-            taskCatalogueSelect.value = 'search';
-            taskNotesTextarea.value = '';
+            taskCatalogueSelect.value = 'need sample';
+            
+            // Clear rich text editor
+            if (taskNotesEditor) {
+                taskNotesEditor.setContents([]);
+            }
 
             // Display attachments
             if (taskAttachmentsDiv) {
@@ -3196,18 +3769,23 @@
 
         function submitTask() {
             const catalogue = taskCatalogueSelect.value;
-            const template = taskNotesTextarea.value.trim();
+            // Get content from Quill editor
+            let template = '';
+            if (taskNotesEditor) {
+                const delta = taskNotesEditor.getContents();
+                template = taskNotesEditor.root.innerHTML;
+            }
             const sequence = taskSequenceInput.value;
-            const customer = taskCustomerInput.value;
+            const customer = taskCustomerSelect ? taskCustomerSelect.options[taskCustomerSelect.selectedIndex].text : '';
             const email = taskEmailInput.value;
             
             // Validate required fields
             if (!catalogue || catalogue === '') {
-                alert('Please select a Catalogue');
+                alert('Please select a Type');
                 return;
             }
             
-            if (!template || template === '') {
+            if (!template || template.trim() === '' || template === '<p><br></p>') {
                 alert('Please enter Template content');
                 return;
             }
@@ -3292,7 +3870,7 @@
                                             <th>Sequence</th>
                                             <th>Customer</th>
                                             <th>Email</th>
-                                            <th>Catalogue</th>
+                                            <th>Type</th>
                                             <th>Template</th>
                                             <th>Created At</th>
                                             <th>Attachments</th>
@@ -3302,7 +3880,7 @@
                                             <th><input type="text" class="task-filter-input" data-field="sequence" placeholder="Filter sequence"></th>
                                             <th><input type="text" class="task-filter-input" data-field="customer" placeholder="Filter customer"></th>
                                             <th><input type="text" class="task-filter-input" data-field="email" placeholder="Filter email"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="catalogue" placeholder="Filter catalogue"></th>
+                                            <th><input type="text" class="task-filter-input" data-field="catalogue" placeholder="Filter type"></th>
                                             <th><input type="text" class="task-filter-input" data-field="template" placeholder="Filter template"></th>
                                             <th><input type="text" class="task-filter-input" data-field="created_at" placeholder="Filter date"></th>
                                             <th><input type="text" class="task-filter-input" data-field="attachments" placeholder="Filter attachments"></th>
@@ -3326,8 +3904,8 @@
                                                     <td>${escapeHtml(task.customer || '')}</td>
                                                     <td>${escapeHtml(task.email || '')}</td>
                                                     <td>${escapeHtml(task.catalogue || '')}</td>
-                                                    <td style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(task.template || '')}">
-                                                        ${escapeHtml(task.template || '')}
+                                                    <td class="task-template-cell" title="${escapeHtml(task.template || '')}">
+                                                        ${task.template || ''}
                                                     </td>
                                                     <td>${escapeHtml(task.created_at || '')}</td>
                                                     <td>${renderTaskAttachments(task)}</td>
@@ -3679,11 +4257,171 @@
             revokePreviewObjectUrl();
         }
 
+        function formatText(command) {
+            document.execCommand(command, false, null);
+            const remarkDiv = document.getElementById('customer-remark');
+            if (remarkDiv) {
+                remarkDiv.focus();
+            }
+        }
+
+        // Country dropdown functions
+        function filterCountries() {
+            const input = document.getElementById('customer-country');
+            const dropdown = document.getElementById('country-dropdown');
+            if (!input || !dropdown) return;
+            
+            const searchTerm = input.value.toLowerCase().trim();
+            const filtered = COUNTRIES.filter(country => 
+                country.toLowerCase().includes(searchTerm)
+            ).slice(0, 10); // Show max 10 results
+            
+            if (filtered.length === 0 || searchTerm === '') {
+                dropdown.classList.add('hidden');
+                return;
+            }
+            
+            dropdown.innerHTML = filtered.map(country => 
+                `<div class="country-dropdown-item" onclick="selectCountry('${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+            ).join('');
+            dropdown.classList.remove('hidden');
+        }
+
+        function showCountryDropdown() {
+            const input = document.getElementById('customer-country');
+            const dropdown = document.getElementById('country-dropdown');
+            if (!input || !dropdown) return;
+            
+            if (input.value.trim() === '') {
+                const topCountries = COUNTRIES.slice(0, 10);
+                dropdown.innerHTML = topCountries.map(country => 
+                    `<div class="country-dropdown-item" onclick="selectCountry('${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                ).join('');
+                dropdown.classList.remove('hidden');
+            } else {
+                filterCountries();
+            }
+        }
+
+        function hideCountryDropdown() {
+            const dropdown = document.getElementById('country-dropdown');
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        function selectCountry(country) {
+            const input = document.getElementById('customer-country');
+            if (input) {
+                input.value = country;
+            }
+            hideCountryDropdown();
+        }
+
+        // Attachment handling functions
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const dropArea = document.getElementById('customer-attachment-area');
+            if (dropArea) {
+                dropArea.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const dropArea = document.getElementById('customer-attachment-area');
+            if (dropArea) {
+                dropArea.classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const dropArea = document.getElementById('customer-attachment-area');
+            if (dropArea) {
+                dropArea.classList.remove('drag-over');
+            }
+            
+            const files = event.dataTransfer.files;
+            addAttachments(Array.from(files));
+        }
+
+        function handleAttachmentSelect(event) {
+            const files = event.target.files;
+            if (files && files.length > 0) {
+                addAttachments(Array.from(files));
+            }
+        }
+
+        function addAttachments(files) {
+            files.forEach(file => {
+                // Check if file already exists
+                if (customerAttachments.some(att => att.name === file.name && att.size === file.size)) {
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64Data = e.target.result.split(',')[1]; // Remove data:type;base64, prefix
+                    customerAttachments.push({
+                        filename: file.name,
+                        size: file.size,
+                        content_type: file.type || 'application/octet-stream',
+                        data: base64Data
+                    });
+                    updateAttachmentList();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function removeAttachment(index) {
+            customerAttachments.splice(index, 1);
+            updateAttachmentList();
+        }
+
+        function updateAttachmentList() {
+            const listDiv = document.getElementById('customer-attachment-list');
+            if (!listDiv) return;
+            
+            if (customerAttachments.length === 0) {
+                listDiv.innerHTML = '';
+                return;
+            }
+            
+            listDiv.innerHTML = customerAttachments.map((att, index) => {
+                const sizeStr = formatAttachmentSize(att.size);
+                return `
+                    <div class="attachment-item">
+                        <span class="attachment-item-name">📎 ${escapeHtml(att.filename)}</span>
+                        <span class="attachment-item-size">${sizeStr}</span>
+                        <span class="attachment-item-remove" onclick="removeAttachment(${index})" title="Remove">✕</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function formatAttachmentSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
         function saveCustomer() {
             const nameInput = document.getElementById('customer-name');
             const emailInput = document.getElementById('customer-email-address');
+            const countryInput = document.getElementById('customer-country');
+            const websiteInput = document.getElementById('customer-website');
+            const remarkDiv = document.getElementById('customer-remark');
+            
             const name = (nameInput.value || '').trim();
             const emailAddress = (emailInput.value || '').trim();
+            const country = (countryInput.value || '').trim();
+            const website = (websiteInput.value || '').trim();
+            const remark = remarkDiv ? remarkDiv.innerHTML.trim() : '';
 
             if (!name) {
                 showCustomerStatus('Customer name is required.', true);
@@ -3701,6 +4439,12 @@
                 return;
             }
 
+            // Website validation (optional, but if provided, should be valid URL)
+            if (website && website.trim() !== '' && !website.match(/^https?:\/\/.+/)) {
+                showCustomerStatus('Please enter a valid website URL (e.g. https://example.com) or leave it empty.', true);
+                return;
+            }
+
             showCustomerStatus('Saving customer...', false, 'info');
 
             fetch('/api/customers', {
@@ -3710,7 +4454,11 @@
                 },
                 body: JSON.stringify({
                     name,
-                    email_address: emailAddress
+                    email_address: emailAddress,
+                    country: country || null,
+                    website: website && website.trim() !== '' ? website : null,
+                    remark: remark || null,
+                    attachments: customerAttachments.length > 0 ? JSON.stringify(customerAttachments) : null
                 })
             })
                 .then(async response => {
@@ -3720,6 +4468,13 @@
                     }
                     nameInput.value = '';
                     emailInput.value = '';
+                    if (countryInput) countryInput.value = '';
+                    if (websiteInput) websiteInput.value = '';
+                    if (remarkDiv) remarkDiv.innerHTML = '';
+                    customerAttachments = [];
+                    updateAttachmentList();
+                    const attachmentInput = document.getElementById('customer-attachment-input');
+                    if (attachmentInput) attachmentInput.value = '';
                     showCustomerStatus('Customer saved.', false);
                     loadCustomers(false);
                 })
@@ -3787,16 +4542,44 @@
                 return;
             }
             customerEmptyMessage.classList.add('hidden');
-            const rows = customers.map(customer => `
+            const rows = customers.map(customer => {
+                const country = customer.country || '';
+                const website = customer.website || '';
+                const remark = customer.remark || '';
+                const websiteLink = website ? (website.startsWith('http') ? website : `https://${website}`) : '';
+                
+                // Parse attachments
+                let attachmentsHtml = '';
+                try {
+                    if (customer.attachments) {
+                        const attachments = JSON.parse(customer.attachments);
+                        if (Array.isArray(attachments) && attachments.length > 0) {
+                            attachmentsHtml = attachments.map((att, idx) => {
+                                const sizeStr = formatAttachmentSize(att.size || 0);
+                                const dataUrl = `data:${att.content_type || 'application/octet-stream'};base64,${att.data}`;
+                                return `<a href="${dataUrl}" download="${escapeHtml(att.filename || 'attachment')}" style="display: block; margin-bottom: 3px; color: #0066cc; text-decoration: underline; font-size: 11px;">📎 ${escapeHtml(att.filename || 'attachment')} (${sizeStr})</a>`;
+                            }).join('');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing attachments:', e);
+                }
+                
+                return `
                 <tr>
                     <td>${escapeHtml(customer.name || '')}</td>
                     <td>${escapeHtml(customer.email_suffix || '')}</td>
+                    <td>${escapeHtml(country)}</td>
+                    <td>${websiteLink ? `<a href="${escapeHtml(websiteLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(website)}</a>` : ''}</td>
+                    <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${remark}</td>
+                    <td style="max-width: 150px; font-size: 11px;">${attachmentsHtml || '-'}</td>
                     <td>${escapeHtml(customer.created_at ? new Date(customer.created_at).toLocaleString() : '')}</td>
                     <td>
                         <button class="form-button" onclick="deleteCustomer(${customer.id}, '${escapeHtml(customer.name || '')}')" style="padding: 5px 10px; font-size: 12px; cursor: pointer;">Delete</button>
                     </td>
                 </tr>
-            `).join('');
+            `;
+            }).join('');
             customerTableBody.innerHTML = rows;
             customerListSection.classList.remove('hidden');
         }

@@ -20,7 +20,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 app = Flask(__name__)
-app.config['VERSION'] = '1.0.47'
+app.config['VERSION'] = '1.0.51'
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Default email configurations (can be overridden via settings)
@@ -105,9 +105,30 @@ def initialize_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 email_suffix TEXT NOT NULL,
+                country TEXT,
+                website TEXT,
+                remark TEXT,
+                attachments TEXT,
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
+        # Migrate existing customers table to add new columns if they don't exist
+        try:
+            cursor.execute("ALTER TABLE customers ADD COLUMN country TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        try:
+            cursor.execute("ALTER TABLE customers ADD COLUMN website TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        try:
+            cursor.execute("ALTER TABLE customers ADD COLUMN remark TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        try:
+            cursor.execute("ALTER TABLE customers ADD COLUMN attachments TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS emails (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -182,12 +203,12 @@ def initialize_database():
             connection.close()
 
 
-def insert_customer(name: str, email_suffix: str) -> int:
+def insert_customer(name: str, email_suffix: str, country: str = None, website: str = None, remark: str = None, attachments: str = None) -> int:
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute(
-        "INSERT INTO customers (name, email_suffix) VALUES (?, ?)",
-        (name, email_suffix)
+        "INSERT INTO customers (name, email_suffix, country, website, remark, attachments) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, email_suffix, country, website, remark, attachments)
     )
     connection.commit()
     customer_id = cursor.lastrowid
@@ -200,7 +221,7 @@ def fetch_customers():
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute("""
-        SELECT id, name, email_suffix, created_at
+        SELECT id, name, email_suffix, country, website, remark, attachments, created_at
         FROM customers
         ORDER BY datetime(created_at) DESC
     """)
@@ -218,10 +239,36 @@ def fetch_customers():
             except ValueError:
                 pass
 
+        # Handle new columns that may not exist in old databases
+        country = None
+        website = None
+        remark = None
+        attachments = None
+        try:
+            country = row['country'] if row['country'] else None
+        except (KeyError, IndexError):
+            pass
+        try:
+            website = row['website'] if row['website'] else None
+        except (KeyError, IndexError):
+            pass
+        try:
+            remark = row['remark'] if row['remark'] else None
+        except (KeyError, IndexError):
+            pass
+        try:
+            attachments = row['attachments'] if row['attachments'] else None
+        except (KeyError, IndexError):
+            pass
+
         customers.append({
             'id': row['id'],
             'name': row['name'],
             'email_suffix': row['email_suffix'],
+            'country': country,
+            'website': website,
+            'remark': remark,
+            'attachments': attachments,
             'created_at': created_at
         })
     return customers
@@ -432,8 +479,22 @@ def load_oauth_token(provider: str) -> Optional[Credentials]:
         
         # Refresh token if expired
         if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            save_oauth_token(provider, creds)
+            try:
+                creds.refresh(Request())
+                save_oauth_token(provider, creds)
+            except Exception as refresh_error:
+                error_str = str(refresh_error)
+                # If refresh token is invalid/revoked, clear the token from database
+                if 'invalid_grant' in error_str.lower() or 'token has been expired' in error_str.lower() or 'revoked' in error_str.lower():
+                    print(f"OAuth token refresh failed (token expired/revoked): {refresh_error}")
+                    # Clear the invalid token from database
+                    connection = get_db_connection()
+                    cursor = connection.cursor()
+                    cursor.execute("DELETE FROM oauth_tokens WHERE provider = ?", (provider,))
+                    connection.commit()
+                    cursor.close()
+                    connection.close()
+                raise refresh_error
         
         return creds
     except Exception as e:
@@ -450,7 +511,7 @@ def fetch_gmail_api(limit=50, days_back=1):
     
     creds = load_oauth_token('gmail')
     if not creds:
-        return {'error': 'Gmail OAuth not configured. Please authenticate first.'}
+        return {'error': 'Gmail OAuth not configured. Please authenticate first.', 'needs_auth': True}
     
     try:
         service = build('gmail', 'v1', credentials=creds)
@@ -606,9 +667,37 @@ def fetch_gmail_api(limit=50, days_back=1):
         
         return {'emails': emails, 'count': len(emails)}
     except HttpError as e:
-        return {'error': f'Gmail API error: {str(e)}'}
+        error_str = str(e)
+        # Check if it's an authentication error
+        if 'invalid_grant' in error_str.lower() or 'token has been expired' in error_str.lower() or 'revoked' in error_str.lower():
+            # Clear the invalid token
+            try:
+                connection = get_db_connection()
+                cursor = connection.cursor()
+                cursor.execute("DELETE FROM oauth_tokens WHERE provider = ?", ('gmail',))
+                connection.commit()
+                cursor.close()
+                connection.close()
+            except Exception:
+                pass
+            return {'error': 'Gmail OAuth token has expired or been revoked. Please re-authenticate.', 'needs_auth': True}
+        return {'error': f'Gmail API error: {error_str}'}
     except Exception as e:
-        return {'error': f'Error fetching Gmail: {str(e)}'}
+        error_str = str(e)
+        # Check if it's an authentication error
+        if 'invalid_grant' in error_str.lower() or 'token has been expired' in error_str.lower() or 'revoked' in error_str.lower():
+            # Clear the invalid token
+            try:
+                connection = get_db_connection()
+                cursor = connection.cursor()
+                cursor.execute("DELETE FROM oauth_tokens WHERE provider = ?", ('gmail',))
+                connection.commit()
+                cursor.close()
+                connection.close()
+            except Exception:
+                pass
+            return {'error': 'Gmail OAuth token has expired or been revoked. Please re-authenticate.', 'needs_auth': True}
+        return {'error': f'Error fetching Gmail: {error_str}'}
 
 
 def build_sequence_code(from_address: str, email_date: Optional[datetime] = None) -> str:
@@ -1037,6 +1126,15 @@ def fetch_gmail():
     """Fetch emails from Gmail using Gmail API"""
     data = request.json or {}
     limit = data.get('limit', 50)
+    days_back = data.get('days_back', 1)
+    try:
+        limit = max(1, int(limit))
+    except (TypeError, ValueError):
+        limit = 50
+    try:
+        days_back = max(0, int(days_back))
+    except (TypeError, ValueError):
+        days_back = 1
     
     # Check if OAuth is configured
     creds = load_oauth_token('gmail')
@@ -1047,10 +1145,13 @@ def fetch_gmail():
             'setup_url': 'https://console.cloud.google.com/'
         }), 401
     
-    # Only fetch today's emails (days_back=0 means only today)
-    result = fetch_gmail_api(limit=limit, days_back=0)
+    # Fetch emails for requested time window
+    result = fetch_gmail_api(limit=limit, days_back=days_back)
     
     if 'error' in result:
+        # If authentication is needed, return 401 status
+        if result.get('needs_auth'):
+            return jsonify(result), 401
         return jsonify(result), 500
     
     # Save emails to SQL database
@@ -1177,6 +1278,10 @@ def customers_endpoint():
     # Support both email_address (new) and email_suffix (old) for backward compatibility
     email_address = (data.get('email_address') or '').strip()
     suffix = (data.get('email_suffix') or '').strip()
+    country = (data.get('country') or '').strip() or None
+    website = (data.get('website') or '').strip() or None
+    remark = (data.get('remark') or '').strip() or None
+    attachments = data.get('attachments') or None
 
     if not name:
         return jsonify({'error': 'Customer name is required'}), 400
@@ -1203,8 +1308,16 @@ def customers_endpoint():
         return jsonify({'error': 'Email address is required'}), 400
 
     try:
-        customer_id = insert_customer(name, full_email)
-        return jsonify({'id': customer_id, 'name': name, 'email_suffix': full_email}), 201
+        customer_id = insert_customer(name, full_email, country, website, remark, attachments)
+        return jsonify({
+            'id': customer_id,
+            'name': name,
+            'email_suffix': full_email,
+            'country': country,
+            'website': website,
+            'remark': remark,
+            'attachments': attachments
+        }), 201
     except Exception as exc:
         return jsonify({'error': f'Database error: {str(exc)}'}), 500
 
@@ -1235,19 +1348,32 @@ def handle_emails():
         provider = (request.args.get('provider') or '').strip().lower()
         if not provider:
             return jsonify({'error': 'Provider query parameter is required'}), 400
+        
+        # Optional days parameter (number of days back to include)
+        days_param = request.args.get('days')
+        default_days = 1
+        if days_param is None or days_param == '':
+            days = default_days
+        else:
+            try:
+                days = max(0, int(days_param))
+            except (TypeError, ValueError):
+                return jsonify({'error': 'Invalid days parameter'}), 400
 
-        # Only load today's emails from SQL
-        today_date = datetime.now().date()
-        today_iso = today_date.isoformat()
+        # Build SQL query with optional date filter
         connection = get_db_connection()
         cursor = connection.cursor()
-        cursor.execute("""
+        query = """
             SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at
             FROM emails
             WHERE provider = ?
-              AND date(datetime(fetched_at)) = ?
-            ORDER BY datetime(date) DESC, datetime(fetched_at) DESC
-        """, (provider, today_iso))
+        """
+        params = [provider]
+        if days > 0:
+            query += " AND datetime(fetched_at) >= datetime('now', ?)"
+            params.append(f'-{days} days')
+        query += " ORDER BY datetime(date) DESC, datetime(fetched_at) DESC"
+        cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
         cursor.close()
         connection.close()

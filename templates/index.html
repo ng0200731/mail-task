@@ -5097,52 +5097,30 @@
                 return;
             }
 
-            // Switch to Task view (right content)
+            // Switch to Task view (right content). This will call loadTaskDisplay(),
+            // which renders the inline task form (including the rich text editor) if needed.
             showTask();
 
-            // Ensure customers are loaded and the inline task form is rendered,
-            // then pre-fill that form with the selected customer's info.
-            const ensureCustomers = (!customerCache || customerCache.length === 0)
-                ? loadCustomers(false)
-                : Promise.resolve(customerCache);
+            // Prefill the inline task form once it is available.
+            // loadTaskDisplay() and renderTaskForm() are asynchronous (customers may need loading,
+            // Quill editor needs time to attach), so we retry a few times.
+            (function applyPrefill(retries) {
+                const customerInput = document.getElementById('task-form-customer');
+                const customerValueInput = document.getElementById('task-form-customer-value');
+                const emailInput = document.getElementById('task-form-email');
 
-            ensureCustomers
-                .then(() => {
-                    const container = document.getElementById('task-display-container');
-                    if (!container) return;
+                if (customerInput && customerValueInput && emailInput) {
+                    customerInput.value = customer.name || customer.company_name || customer.email_suffix || '';
+                    customerValueInput.value = customer.email_suffix || '';
+                    const storedEmail = (customer.email_suffix || '').trim();
+                    emailInput.value = storedEmail.includes('@') ? storedEmail : '';
+                    return;
+                }
 
-                    // Ensure the inline task form exists
-                    renderTaskForm(container);
-
-                    // After render, wire autocomplete and then set values
-                    setTimeout(() => {
-                        setupAutocomplete(
-                            'task-form-customer',
-                            'task-form-customer-dropdown',
-                            'task-form-customer-value',
-                            'task-form-email'
-                        );
-
-                        const customerInput = document.getElementById('task-form-customer');
-                        const customerValueInput = document.getElementById('task-form-customer-value');
-                        const emailInput = document.getElementById('task-form-email');
-
-                        if (customerInput) {
-                            customerInput.value = customer.name || customer.company_name || customer.email_suffix || '';
-                        }
-                        if (customerValueInput) {
-                            customerValueInput.value = customer.email_suffix || '';
-                        }
-                        if (emailInput) {
-                            const storedEmail = (customer.email_suffix || '').trim();
-                            emailInput.value = storedEmail.includes('@') ? storedEmail : '';
-                        }
-                    }, 100);
-                })
-                .catch(() => {
-                    // If anything fails, at least navigate to Task screen
-                    showTask();
-                });
+                if (retries > 0) {
+                    setTimeout(() => applyPrefill(retries - 1), 100);
+                }
+            })(20);
         }
 
         function closeTaskModal() {

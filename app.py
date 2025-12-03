@@ -134,6 +134,14 @@ def initialize_database():
             cursor.execute("ALTER TABLE customers ADD COLUMN company_name TEXT")
         except sqlite3.OperationalError:
             pass  # Column already exists
+        try:
+            cursor.execute("ALTER TABLE customers ADD COLUMN tel TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        try:
+            cursor.execute("ALTER TABLE customers ADD COLUMN source TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS emails (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -230,24 +238,209 @@ def initialize_database():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
-        # Initialize default countries if table is empty
-        cursor.execute("SELECT COUNT(*) as count FROM countries")
-        if cursor.fetchone()['count'] == 0:
-            default_countries = [
-                ('United States', 1),
-                ('United Kingdom', 2),
-                ('Canada', 3),
-                ('Australia', 4),
-                ('Germany', 5),
-                ('France', 6),
-                ('Japan', 7),
-                ('China', 8),
-                ('India', 9),
-                ('Brazil', 10)
-            ]
-            cursor.executemany("""
-                INSERT INTO countries (name, display_order) VALUES (?, ?)
-            """, default_countries)
+        # Initialize or update countries list
+        default_countries = [
+            ('India', 1),
+            ('China', 2),
+            ('United States', 3),
+            ('Indonesia', 4),
+            ('Pakistan', 5),
+            ('Nigeria', 6),
+            ('Brazil', 7),
+            ('Bangladesh', 8),
+            ('Russia', 9),
+            ('Ethiopia', 10),
+            ('Mexico', 11),
+            ('Japan', 12),
+            ('Egypt', 13),
+            ('Philippines', 14),
+            ('DR Congo', 15),
+            ('Vietnam', 16),
+            ('Iran', 17),
+            ('Turkey', 18),
+            ('Germany', 19),
+            ('Thailand', 20),
+            ('Tanzania', 21),
+            ('United Kingdom', 22),
+            ('France', 23),
+            ('South Africa', 24),
+            ('Italy', 25),
+            ('Kenya', 26),
+            ('Myanmar', 27),
+            ('Colombia', 28),
+            ('South Korea', 29),
+            ('Sudan', 30),
+            ('Uganda', 31),
+            ('Spain', 32),
+            ('Algeria', 33),
+            ('Iraq', 34),
+            ('Argentina', 35),
+            ('Afghanistan', 36),
+            ('Yemen', 37),
+            ('Canada', 38),
+            ('Angola', 39),
+            ('Ukraine', 40),
+            ('Morocco', 41),
+            ('Poland', 42),
+            ('Uzbekistan', 43),
+            ('Malaysia', 44),
+            ('Mozambique', 45),
+            ('Ghana', 46),
+            ('Peru', 47),
+            ('Saudi Arabia', 48),
+            ('Madagascar', 49),
+            ('Côte d\'Ivoire', 50),
+            ('Cameroon', 51),
+            ('Nepal', 52),
+            ('Venezuela', 53),
+            ('Niger', 54),
+            ('Australia', 55),
+            ('North Korea', 56),
+            ('Syria', 57),
+            ('Mali', 58),
+            ('Burkina Faso', 59),
+            ('Sri Lanka', 60),
+            ('Malawi', 61),
+            ('Zambia', 62),
+            ('Chad', 63),
+            ('Kazakhstan', 64),
+            ('Chile', 65),
+            ('Somalia', 66),
+            ('Senegal', 67),
+            ('Romania', 68),
+            ('Guatemala', 69),
+            ('Netherlands', 70),
+            ('Ecuador', 71),
+            ('Cambodia', 72),
+            ('Zimbabwe', 73),
+            ('Guinea', 74),
+            ('Benin', 75),
+            ('Rwanda', 76),
+            ('Burundi', 77),
+            ('Bolivia', 78),
+            ('Tunisia', 79),
+            ('South Sudan', 80),
+            ('Haiti', 81),
+            ('Belgium', 82),
+            ('Jordan', 83),
+            ('Dominican Republic', 84),
+            ('United Arab Emirates', 85),
+            ('Honduras', 86),
+            ('Cuba', 87),
+            ('Tajikistan', 88),
+            ('Papua New Guinea', 89),
+            ('Sweden', 90),
+            ('Czech Republic (Czechia)', 91),
+            ('Portugal', 92),
+            ('Azerbaijan', 93),
+            ('Greece', 94),
+            ('Togo', 95),
+            ('Hungary', 96),
+            ('Israel', 97),
+            ('Austria', 98),
+            ('Belarus', 99),
+            ('Switzerland', 100),
+            ('Sierra Leone', 101),
+            ('Laos', 102),
+            ('Turkmenistan', 103),
+            ('Libya', 104),
+            ('Kyrgyzstan', 105),
+            ('Paraguay', 106),
+            ('Nicaragua', 107),
+            ('Bulgaria', 108),
+            ('Serbia', 109),
+            ('Congo', 110),
+            ('El Salvador', 111),
+            ('Denmark', 112),
+            ('Singapore', 113),
+            ('Lebanon', 114),
+            ('Liberia', 115),
+            ('Finland', 116),
+            ('Norway', 117),
+            ('State of Palestine', 118),
+            ('Central African Republic', 119),
+            ('Oman', 120),
+            ('Slovakia', 121),
+            ('Mauritania', 122),
+            ('Ireland', 123),
+            ('New Zealand', 124),
+            ('Costa Rica', 125),
+            ('Kuwait', 126),
+            ('Panama', 127),
+            ('Croatia', 128),
+            ('Georgia', 129),
+            ('Eritrea', 130),
+            ('Mongolia', 131),
+            ('Uruguay', 132),
+            ('Bosnia and Herzegovina', 133),
+            ('Qatar', 134),
+            ('Namibia', 135),
+            ('Moldova', 136),
+            ('Armenia', 137),
+            ('Jamaica', 138),
+            ('Lithuania', 139),
+            ('Gambia', 140),
+            ('Albania', 141),
+            ('Gabon', 142),
+            ('Botswana', 143),
+            ('Lesotho', 144),
+            ('Guinea-Bissau', 145),
+            ('Slovenia', 146),
+            ('Equatorial Guinea', 147),
+            ('Latvia', 148),
+            ('North Macedonia', 149),
+            ('Bahrain', 150),
+            ('Trinidad and Tobago', 151),
+            ('Timor-Leste', 152),
+            ('Cyprus', 153),
+            ('Estonia', 154),
+            ('Mauritius', 155),
+            ('Eswatini', 156),
+            ('Djibouti', 157),
+            ('Fiji', 158),
+            ('Comoros', 159),
+            ('Solomon Islands', 160),
+            ('Guyana', 161),
+            ('Bhutan', 162),
+            ('Luxembourg', 163),
+            ('Suriname', 164),
+            ('Montenegro', 165),
+            ('Malta', 166),
+            ('Maldives', 167),
+            ('Cabo Verde', 168),
+            ('Brunei', 169),
+            ('Belize', 170),
+            ('Bahamas', 171),
+            ('Iceland', 172),
+            ('Vanuatu', 173),
+            ('Barbados', 174),
+            ('Sao Tome & Principe', 175),
+            ('Samoa', 176),
+            ('Saint Lucia', 177),
+            ('Kiribati', 178),
+            ('Seychelles', 179),
+            ('Grenada', 180),
+            ('Micronesia', 181),
+            ('Tonga', 182),
+            ('St. Vincent & Grenadines', 183),
+            ('Antigua and Barbuda', 184),
+            ('Andorra', 185),
+            ('Dominica', 186),
+            ('Saint Kitts & Nevis', 187),
+            ('Liechtenstein', 188),
+            ('Monaco', 189),
+            ('Marshall Islands', 190),
+            ('San Marino', 191),
+            ('Palau', 192),
+            ('Nauru', 193),
+            ('Tuvalu', 194),
+            ('Holy See', 195)
+        ]
+        # Replace all countries with the new list
+        cursor.execute("DELETE FROM countries")
+        cursor.executemany("""
+            INSERT INTO countries (name, display_order) VALUES (?, ?)
+        """, default_countries)
         connection.commit()
     finally:
         if cursor:
@@ -256,12 +449,12 @@ def initialize_database():
             connection.close()
 
 
-def insert_customer(name: str, email_suffix: str, country: str = None, website: str = None, remark: str = None, attachments: str = None, company_name: str = None) -> int:
+def insert_customer(name: str, email_suffix: str, country: str = None, website: str = None, remark: str = None, attachments: str = None, company_name: str = None, tel: str = None, source: str = None) -> int:
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute(
-        "INSERT INTO customers (name, email_suffix, country, website, remark, attachments, company_name) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (name, email_suffix, country, website, remark, attachments, company_name)
+        "INSERT INTO customers (name, email_suffix, country, website, remark, attachments, company_name, tel, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (name, email_suffix, country, website, remark, attachments, company_name, tel, source)
     )
     connection.commit()
     customer_id = cursor.lastrowid
@@ -274,7 +467,7 @@ def fetch_customers():
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute("""
-        SELECT id, name, email_suffix, country, website, remark, attachments, company_name, created_at
+        SELECT id, name, email_suffix, country, website, remark, attachments, company_name, tel, source, created_at
         FROM customers
         ORDER BY datetime(created_at) DESC
     """)
@@ -317,6 +510,14 @@ def fetch_customers():
             company_name = row['company_name'] if row['company_name'] else None
         except (KeyError, IndexError):
             company_name = None
+        try:
+            tel = row['tel'] if row['tel'] else None
+        except (KeyError, IndexError):
+            tel = None
+        try:
+            source = row['source'] if row['source'] else None
+        except (KeyError, IndexError):
+            source = None
 
         customers.append({
             'id': row['id'],
@@ -324,9 +525,11 @@ def fetch_customers():
             'email_suffix': row['email_suffix'],
             'country': country,
             'website': website,
+            'source': source,
             'remark': remark,
             'attachments': attachments,
             'company_name': company_name,
+            'tel': tel,
             'created_at': created_at
         })
     return customers
@@ -1338,9 +1541,11 @@ def customers_endpoint():
     suffix = (data.get('email_suffix') or '').strip()
     country = (data.get('country') or '').strip() or None
     website = (data.get('website') or '').strip() or None
+    source = (data.get('source') or '').strip() or None
     remark = (data.get('remark') or '').strip() or None
     attachments = data.get('attachments') or None
     company_name = (data.get('company_name') or '').strip() or None
+    tel = (data.get('tel') or '').strip() or None
 
     if not name:
         return jsonify({'error': 'Customer name is required'}), 400
@@ -1367,13 +1572,15 @@ def customers_endpoint():
         return jsonify({'error': 'Email address is required'}), 400
 
     try:
-        customer_id = insert_customer(name, full_email, country, website, remark, attachments, company_name)
+        customer_id = insert_customer(name, full_email, country, website, remark, attachments, company_name, tel, source)
         return jsonify({
             'id': customer_id,
             'name': name,
             'email_suffix': full_email,
             'country': country,
+            'tel': tel,
             'website': website,
+            'source': source,
             'remark': remark,
             'attachments': attachments,
             'company_name': company_name
@@ -1382,24 +1589,80 @@ def customers_endpoint():
         return jsonify({'error': f'Database error: {str(exc)}'}), 500
 
 
-@app.route('/api/customers/<int:customer_id>', methods=['DELETE'])
-def delete_customer(customer_id):
-    """Delete a customer by ID"""
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
-        connection.commit()
-        deleted = cursor.rowcount > 0
-        cursor.close()
-        connection.close()
-        
-        if deleted:
-            return jsonify({'status': 'deleted', 'id': customer_id})
-        else:
-            return jsonify({'error': 'Customer not found'}), 404
-    except Exception as exc:
-        return jsonify({'error': f'Database error: {str(exc)}'}), 500
+@app.route('/api/customers/<int:customer_id>', methods=['PUT', 'DELETE'])
+def update_or_delete_customer(customer_id):
+    """Update or delete a customer by ID"""
+    if request.method == 'PUT':
+        try:
+            data = request.json or {}
+            name = (data.get('name') or '').strip()
+            email_address = (data.get('email_address') or '').strip()
+            country = (data.get('country') or '').strip() or None
+            website = (data.get('website') or '').strip() or None
+            source = (data.get('source') or '').strip() or None
+            remark = (data.get('remark') or '').strip() or None
+            attachments = data.get('attachments') or None
+            company_name = (data.get('company_name') or '').strip() or None
+            tel = (data.get('tel') or '').strip() or None
+            
+            if not name:
+                return jsonify({'error': 'Customer name is required'}), 400
+            
+            if email_address:
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                if not re.match(email_pattern, email_address):
+                    return jsonify({'error': 'Invalid email address format'}), 400
+                full_email = email_address
+            else:
+                return jsonify({'error': 'Email address is required'}), 400
+            
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            cursor.execute("""
+                UPDATE customers 
+                SET name = ?, email_suffix = ?, country = ?, website = ?, source = ?, remark = ?, attachments = ?, company_name = ?, tel = ?
+                WHERE id = ?
+            """, (name, full_email, country, website, source, remark, attachments, company_name, tel, customer_id))
+            connection.commit()
+            updated = cursor.rowcount > 0
+            cursor.close()
+            connection.close()
+            
+            if updated:
+                return jsonify({
+                    'id': customer_id,
+                    'name': name,
+                    'email_suffix': full_email,
+                    'country': country,
+                    'tel': tel,
+                    'website': website,
+                    'source': source,
+                    'remark': remark,
+                    'attachments': attachments,
+                    'company_name': company_name,
+                    'status': 'updated'
+                })
+            else:
+                return jsonify({'error': 'Customer not found'}), 404
+        except Exception as exc:
+            return jsonify({'error': f'Database error: {str(exc)}'}), 500
+    
+    elif request.method == 'DELETE':
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            cursor.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
+            connection.commit()
+            deleted = cursor.rowcount > 0
+            cursor.close()
+            connection.close()
+            
+            if deleted:
+                return jsonify({'status': 'deleted', 'id': customer_id})
+            else:
+                return jsonify({'error': 'Customer not found'}), 404
+        except Exception as exc:
+            return jsonify({'error': f'Database error: {str(exc)}'}), 500
 
 
 @app.route('/api/emails', methods=['GET', 'POST'])

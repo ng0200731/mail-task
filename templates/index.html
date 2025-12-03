@@ -1194,17 +1194,7 @@
                 <div class="settings-section">
                     <h3 style="font-family: Arial, sans-serif; font-size: 18px; color: #000000; margin-bottom: 15px; border-bottom: 1px solid #000000; padding-bottom: 10px;">Create Customer</h3>
                     <div class="customer-form-grid">
-                        <!-- Row 1: Company Name | Customer Name -->
-                        <div class="form-group">
-                            <label for="company-name">Company Name</label>
-                            <input type="text" id="company-name" placeholder="Enter company name">
-                        </div>
-                        <div class="form-group">
-                            <label for="customer-name">Customer Name</label>
-                            <input type="text" id="customer-name" placeholder="Enter customer name">
-                        </div>
-
-                        <!-- Row 2: Country | Email -->
+                        <!-- Row 1: Country | Company Name | Customer Name | Email -->
                         <div class="form-group">
                             <label for="customer-country">Country</label>
                             <div style="position: relative;">
@@ -1213,18 +1203,34 @@
                             </div>
                         </div>
                         <div class="form-group">
+                            <label for="company-name">Company Name</label>
+                            <input type="text" id="company-name" placeholder="Enter company name">
+                        </div>
+                        <div class="form-group">
+                            <label for="customer-name">Customer Name</label>
+                            <input type="text" id="customer-name" placeholder="Enter customer name">
+                        </div>
+                        <div class="form-group">
                             <label for="customer-email-address">Email</label>
                             <input type="email" id="customer-email-address" placeholder="customer@example.com" pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}">
                         </div>
+                        <div class="form-group">
+                            <label for="customer-tel">Tel</label>
+                            <input type="tel" id="customer-tel" placeholder="Enter telephone number">
+                        </div>
 
-                        <!-- Row 3: Web Site (full width) -->
-                        <div class="form-group form-group-full">
+                        <!-- Row 3: Web Site | Source (same line, divided evenly) -->
+                        <div class="form-group">
                             <label for="customer-website">Web Site</label>
                             <input type="url" id="customer-website" placeholder="https://example.com">
                         </div>
-
-                        <!-- Row 4: Attachment | Remark (rich text) -->
                         <div class="form-group">
+                            <label for="customer-source">Source</label>
+                            <input type="text" id="customer-source" placeholder="Enter source">
+                        </div>
+
+                        <!-- Row 4: Attachment (new line, full width) -->
+                        <div class="form-group form-group-full">
                             <label>Attachment</label>
                             <div id="customer-attachment-area" class="attachment-drop-area" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="document.getElementById('customer-attachment-input').click()">
                                 <div class="attachment-drop-content">
@@ -1236,7 +1242,9 @@
                             </div>
                             <div id="customer-attachment-list" class="attachment-list"></div>
                         </div>
-                        <div class="form-group form-group-rich">
+
+                        <!-- Row 5: Remark (new line, full width) -->
+                        <div class="form-group form-group-full form-group-rich">
                             <label for="customer-remark">Remark (Rich Text)</label>
                             <div id="customer-remark" contenteditable="true" style="min-height: 120px; border: 1px solid #000000; padding: 8px; font-family: Arial, sans-serif; font-size: 14px; background-color: #ffffff; color: #000000; overflow-y: auto;" data-placeholder="Enter remarks with HTML formatting..."></div>
                             <div style="margin-top: 5px; font-size: 12px; color: #666;">
@@ -1259,13 +1267,15 @@
                             <tr>
                                 <th style="width: 12%;">Company Name</th>
                                 <th style="width: 10%;">Name</th>
-                                <th style="width: 13%;">Email Address</th>
-                                <th style="width: 9%;">Country</th>
-                                <th style="width: 11%;">Website</th>
-                                <th style="width: 13%;">Remark</th>
-                                <th style="width: 11%;">Attachments</th>
-                                <th style="width: 11%;">Created At</th>
-                                <th style="width: 10%;">Actions</th>
+                                <th style="width: 12%;">Email Address</th>
+                                <th style="width: 10%;">Tel</th>
+                                <th style="width: 8%;">Country</th>
+                                <th style="width: 10%;">Website</th>
+                                <th style="width: 10%;">Source</th>
+                                <th style="width: 12%;">Remark</th>
+                                <th style="width: 10%;">Attachments</th>
+                                <th style="width: 10%;">Created At</th>
+                                <th style="width: 6%;">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="customer-table-body">
@@ -5017,7 +5027,7 @@
                                                     <td class="task-template-cell" title="${escapeHtml(task.template || '')}">
                                                         ${task.template || ''}
                                                     </td>
-                                                    <td>${escapeHtml(task.created_at || '')}</td>
+                                                    <td>${task.created_at ? escapeHtml(new Date(task.created_at).toLocaleString()) : ''}</td>
                                                     <td>${renderTaskAttachments(task)}</td>
                                                     <td>
                                                         <button class="form-button" onclick="deleteTask(${task.id})" style="font-size: 12px; padding: 5px 10px;">Delete</button>
@@ -5558,15 +5568,19 @@
             const nameInput = document.getElementById('customer-name');
             const companyInput = document.getElementById('company-name');
             const emailInput = document.getElementById('customer-email-address');
+            const telInput = document.getElementById('customer-tel');
             const countryInput = document.getElementById('customer-country');
             const websiteInput = document.getElementById('customer-website');
+            const sourceInput = document.getElementById('customer-source');
             const remarkDiv = document.getElementById('customer-remark');
             
             const name = (nameInput.value || '').trim();
             const companyName = (companyInput && companyInput.value || '').trim();
             const emailAddress = (emailInput.value || '').trim();
+            const tel = (telInput && telInput.value || '').trim();
             const country = (countryInput.value || '').trim();
             const website = (websiteInput.value || '').trim();
+            const source = (sourceInput && sourceInput.value || '').trim();
             const remark = remarkDiv ? remarkDiv.innerHTML.trim() : '';
 
             if (!name) {
@@ -5601,8 +5615,10 @@
                 body: JSON.stringify({
                     name,
                     email_address: emailAddress,
+                    tel: tel || null,
                     country: country || null,
                     website: website && website.trim() !== '' ? website : null,
+                    source: source || null,
                     remark: remark || null,
                     attachments: customerAttachments.length > 0 ? JSON.stringify(customerAttachments) : null,
                     company_name: companyName || null
@@ -5616,8 +5632,10 @@
                     nameInput.value = '';
                     if (companyInput) companyInput.value = '';
                     emailInput.value = '';
+                    if (telInput) telInput.value = '';
                     if (countryInput) countryInput.value = '';
                     if (websiteInput) websiteInput.value = '';
+                    if (sourceInput) sourceInput.value = '';
                     if (remarkDiv) remarkDiv.innerHTML = '';
                     customerAttachments = [];
                     updateAttachmentList();
@@ -5645,6 +5663,170 @@
             setTimeout(() => {
                 customerStatusDiv.classList.add('hidden');
             }, 3000);
+        }
+
+        let editingCustomerId = null;
+        let originalCustomerData = {};
+
+        function editCustomer(customerId) {
+            if (editingCustomerId && editingCustomerId !== customerId) {
+                cancelCustomerEdit(editingCustomerId);
+            }
+            
+            editingCustomerId = customerId;
+            const row = document.getElementById(`customer-row-${customerId}`);
+            if (!row) return;
+            
+            // Store original data
+            const cells = row.querySelectorAll('.editable-cell');
+            originalCustomerData[customerId] = {};
+            cells.forEach(cell => {
+                const field = cell.dataset.field;
+                let value = '';
+                
+                // Handle different field types
+                if (field === 'website') {
+                    const link = cell.querySelector('a');
+                    if (link) {
+                        value = link.href;
+                    } else {
+                        value = cell.textContent.trim();
+                    }
+                } else if (field === 'remark') {
+                    // For remark, preserve HTML content
+                    value = cell.innerHTML.trim();
+                } else {
+                    value = cell.textContent.trim();
+                }
+                
+                originalCustomerData[customerId][field] = value;
+                
+                // Make cell editable
+                if (field === 'remark') {
+                    // Strip HTML tags for editing (show plain text)
+                    const textValue = cell.textContent.trim();
+                    cell.innerHTML = `<textarea style="width: 100%; min-height: 60px; padding: 5px; border: 1px solid #000000; font-family: Arial, sans-serif; font-size: 12px;" data-field="${field}">${escapeHtml(textValue)}</textarea>`;
+                } else {
+                    cell.innerHTML = `<input type="text" value="${escapeHtml(value)}" style="width: 100%; padding: 5px; border: 1px solid #000000; font-size: 12px;" data-field="${field}">`;
+                }
+                cell.style.backgroundColor = '#fff9c4';
+            });
+            
+            // Show/hide buttons
+            row.querySelector('.edit-customer-btn').classList.add('hidden');
+            row.querySelector('.save-customer-btn').classList.remove('hidden');
+            row.querySelector('.cancel-customer-btn').classList.remove('hidden');
+        }
+
+        function cancelCustomerEdit(customerId) {
+            if (!editingCustomerId || editingCustomerId !== customerId) return;
+            
+            const row = document.getElementById(`customer-row-${customerId}`);
+            if (!row) return;
+            
+            const original = originalCustomerData[customerId];
+            if (!original) return;
+            
+            // Restore original values
+            const cells = row.querySelectorAll('.editable-cell');
+            cells.forEach(cell => {
+                const field = cell.dataset.field;
+                const value = original[field] || '';
+                
+                if (field === 'website' && value) {
+                    const websiteLink = value.startsWith('http') ? value : `https://${value}`;
+                    const displayValue = value.replace(/^https?:\/\//, '');
+                    cell.innerHTML = `<a href="${escapeHtml(websiteLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayValue)}</a>`;
+                } else if (field === 'remark') {
+                    // Restore HTML content for remark
+                    cell.innerHTML = value;
+                } else {
+                    cell.textContent = value;
+                }
+                cell.style.backgroundColor = '';
+            });
+            
+            // Show/hide buttons
+            row.querySelector('.edit-customer-btn').classList.remove('hidden');
+            row.querySelector('.save-customer-btn').classList.add('hidden');
+            row.querySelector('.cancel-customer-btn').classList.add('hidden');
+            
+            editingCustomerId = null;
+            delete originalCustomerData[customerId];
+        }
+
+        function saveCustomerEdit(customerId) {
+            if (!editingCustomerId || editingCustomerId !== customerId) return;
+            
+            const row = document.getElementById(`customer-row-${customerId}`);
+            if (!row) return;
+            
+            // Collect edited values
+            const editedData = {};
+            const cells = row.querySelectorAll('.editable-cell');
+            cells.forEach(cell => {
+                const field = cell.dataset.field;
+                const input = cell.querySelector('input, textarea');
+                if (input) {
+                    editedData[field] = input.value.trim();
+                }
+            });
+            
+            // Validate required fields
+            if (!editedData.name) {
+                alert('Customer name is required');
+                return;
+            }
+            if (!editedData.email_suffix) {
+                alert('Email address is required');
+                return;
+            }
+            
+            // Validate email format
+            const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailPattern.test(editedData.email_suffix)) {
+                alert('Please enter a valid email address');
+                return;
+            }
+            
+            // Get original customer data for attachments
+            const originalCustomer = customerCache.find(c => c.id === customerId);
+            const attachments = originalCustomer ? originalCustomer.attachments : null;
+            
+            showCustomerStatus('Saving customer...', false, 'info');
+            
+            fetch(`/api/customers/${customerId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: editedData.name,
+                    email_address: editedData.email_suffix,
+                    company_name: editedData.company_name || null,
+                    tel: editedData.tel || null,
+                    country: editedData.country || null,
+                    website: editedData.website || null,
+                    source: editedData.source || null,
+                    remark: editedData.remark || null,
+                    attachments: attachments
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showCustomerStatus(`Error: ${data.error}`, true);
+                } else {
+                    showCustomerStatus('Customer updated.', false);
+                    editingCustomerId = null;
+                    delete originalCustomerData[customerId];
+                    // Reload customer list
+                    loadCustomers(false);
+                }
+            })
+            .catch(error => {
+                showCustomerStatus(`Error: ${error.message}`, true);
+            });
         }
 
         function deleteCustomer(customerId, customerName) {
@@ -5733,17 +5915,22 @@
                 }
                 
                 return `
-                <tr>
-                    <td>${escapeHtml(customer.company_name || '')}</td>
-                    <td>${escapeHtml(customer.name || '')}</td>
-                    <td>${escapeHtml(customer.email_suffix || '')}</td>
-                    <td>${escapeHtml(country)}</td>
-                    <td>${websiteLink ? `<a href="${escapeHtml(websiteLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(website)}</a>` : ''}</td>
-                    <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${remark}</td>
+                <tr id="customer-row-${customer.id}" data-customer-id="${customer.id}">
+                    <td class="editable-cell" data-field="company_name">${escapeHtml(customer.company_name || '')}</td>
+                    <td class="editable-cell" data-field="name">${escapeHtml(customer.name || '')}</td>
+                    <td class="editable-cell" data-field="email_suffix">${escapeHtml(customer.email_suffix || '')}</td>
+                    <td class="editable-cell" data-field="tel">${escapeHtml(customer.tel || '')}</td>
+                    <td class="editable-cell" data-field="country">${escapeHtml(country)}</td>
+                    <td class="editable-cell" data-field="website">${websiteLink ? `<a href="${escapeHtml(websiteLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(website)}</a>` : ''}</td>
+                    <td class="editable-cell" data-field="source">${escapeHtml(customer.source || '')}</td>
+                    <td class="editable-cell" data-field="remark" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${remark}</td>
                     <td style="max-width: 150px; font-size: 11px;">${attachmentsHtml || '-'}</td>
                     <td>${escapeHtml(customer.created_at ? new Date(customer.created_at).toLocaleString() : '')}</td>
                     <td>
-                        <button class="form-button" onclick="deleteCustomer(${customer.id}, '${escapeHtml(customer.name || '')}')" style="padding: 5px 10px; font-size: 12px; cursor: pointer;">Delete</button>
+                        <button class="form-button edit-customer-btn" onclick="editCustomer(${customer.id})" style="padding: 5px 10px; font-size: 12px; cursor: pointer; margin-right: 5px;">Edit</button>
+                        <button class="form-button save-customer-btn hidden" onclick="saveCustomerEdit(${customer.id})" style="padding: 5px 10px; font-size: 12px; cursor: pointer; margin-right: 5px; background-color: #28a745; color: white;">Save</button>
+                        <button class="form-button cancel-customer-btn hidden" onclick="cancelCustomerEdit(${customer.id})" style="padding: 5px 10px; font-size: 12px; cursor: pointer; margin-right: 5px; background-color: #6c757d; color: white;">Cancel</button>
+                        <button class="form-button" onclick="deleteCustomer(${customer.id}, '${escapeHtml(customer.name || '')}')" style="padding: 5px 10px; font-size: 12px; cursor: pointer; background-color: #dc3545; color: white;">Delete</button>
                     </td>
                 </tr>
             `;

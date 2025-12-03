@@ -1091,6 +1091,13 @@
             background-color: #f0f0f0;
         }
 
+        .customer-filter-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 3px 4px;
+            font-size: 12px;
+        }
+
         /* Sticky header + filter row for task list */
         .task-table thead th {
             position: sticky;
@@ -1381,6 +1388,20 @@
                                 <th style="width: 10%;">Attachments</th>
                                 <th style="width: 10%;">Created At</th>
                                 <th style="width: 6%;">Actions</th>
+                            </tr>
+                            <tr>
+                                <th><input type="text" class="customer-filter-input" data-field="company_name" placeholder="Filter company"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="name" placeholder="Filter name"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="email_suffix" placeholder="Filter email"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="tel" placeholder="Filter tel"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="country" placeholder="Filter country"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="website" placeholder="Filter website"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="source" placeholder="Filter source"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="business_type" placeholder="Filter business type"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="remark" placeholder="Filter remark"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="attachments" placeholder="Filter attachments"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="created_at" placeholder="Filter created"></th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody id="customer-table-body">
@@ -7841,10 +7862,12 @@
                 
                 // Parse attachments
                 let attachmentsHtml = '';
+                let attachmentsText = '';
                 try {
                     if (customer.attachments) {
                         const attachments = JSON.parse(customer.attachments);
                         if (Array.isArray(attachments) && attachments.length > 0) {
+                            attachmentsText = attachments.map(att => att.filename || 'attachment').join(', ');
                             attachmentsHtml = attachments.map((att, idx) => {
                                 const filename = att.filename || 'attachment';
                                 const safeFilename = escapeHtml(filename);
@@ -7878,8 +7901,21 @@
                     console.error('Error parsing attachments:', e);
                 }
                 
+                const plainRemark = (remark || '').replace(/<[^>]+>/g, '');
+                
                 return `
-                <tr id="customer-row-${customer.id}" data-customer-id="${customer.id}">
+                <tr id="customer-row-${customer.id}" data-customer-id="${customer.id}"
+                    data-company_name="${escapeHtml(customer.company_name || '')}"
+                    data-name="${escapeHtml(customer.name || '')}"
+                    data-email_suffix="${escapeHtml(customer.email_suffix || '')}"
+                    data-tel="${escapeHtml(customer.tel || '')}"
+                    data-country="${escapeHtml(country)}"
+                    data-website="${escapeHtml(website)}"
+                    data-source="${escapeHtml(customer.source || '')}"
+                    data-business_type="${escapeHtml(customer.business_type || '')}"
+                    data-remark="${escapeHtml(plainRemark)}"
+                    data-attachments="${escapeHtml(attachmentsText)}"
+                    data-created_at="${escapeHtml(customer.created_at || '')}">
                     <td class="editable-cell" data-field="company_name">${escapeHtml(customer.company_name || '')}</td>
                     <td class="editable-cell" data-field="name">${escapeHtml(customer.name || '')}</td>
                     <td class="editable-cell" data-field="email_suffix">${escapeHtml(customer.email_suffix || '')}</td>
@@ -7903,6 +7939,41 @@
             }).join('');
             customerTableBody.innerHTML = rows;
             customerListSection.classList.remove('hidden');
+
+            // Attach header filter handlers
+            const filterInputs = document.querySelectorAll('.customer-filter-input');
+            filterInputs.forEach(input => {
+                input.removeEventListener('input', applyCustomerTableFilters);
+                input.addEventListener('input', applyCustomerTableFilters);
+            });
+        }
+
+        function applyCustomerTableFilters() {
+            if (!customerTableBody) return;
+
+            const filters = {};
+            const filterInputs = document.querySelectorAll('.customer-filter-input');
+            filterInputs.forEach(input => {
+                const field = input.dataset.field;
+                const value = (input.value || '').trim().toLowerCase();
+                if (field) {
+                    filters[field] = value;
+                }
+            });
+
+            const rows = Array.from(customerTableBody.querySelectorAll('tr'));
+            rows.forEach(row => {
+                let visible = true;
+                for (const [field, value] of Object.entries(filters)) {
+                    if (!value) continue;
+                    const dataValue = (row.dataset[field] || '').toLowerCase();
+                    if (!dataValue.includes(value)) {
+                        visible = false;
+                        break;
+                    }
+                }
+                row.style.display = visible ? '' : 'none';
+            });
         }
 
         function loadCustomers(showStatus = false) {

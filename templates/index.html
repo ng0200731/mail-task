@@ -5972,11 +5972,11 @@
                 // Show top countries if no match
                 const topCountries = COUNTRIES.slice(0, 10);
                 dropdown.innerHTML = topCountries.map(country => 
-                    `<div class="country-dropdown-item" onclick="selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                    `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
                 ).join('');
             } else {
                 dropdown.innerHTML = filtered.map(country => 
-                    `<div class="country-dropdown-item" onclick="selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                    `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
                 ).join('');
             }
             dropdown.classList.remove('hidden');
@@ -6002,31 +6002,11 @@
                 return;
             }
             
-            // Always show dropdown when focused, even if there's a value
-            if (input.value.trim() === '') {
-                const topCountries = COUNTRIES.slice(0, 10);
-                dropdown.innerHTML = topCountries.map(country => 
-                    `<div class="country-dropdown-item" onclick="selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
-                ).join('');
-            } else {
-                // Show filtered results, or all if no match
-                const searchTerm = input.value.toLowerCase().trim();
-                const filtered = COUNTRIES.filter(country => 
-                    country.toLowerCase().includes(searchTerm)
-                ).slice(0, 10);
-                
-                if (filtered.length > 0) {
-                    dropdown.innerHTML = filtered.map(country => 
-                        `<div class="country-dropdown-item" onclick="selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
-                    ).join('');
-                } else {
-                    // Show top countries if no match
-                    const topCountries = COUNTRIES.slice(0, 10);
-                    dropdown.innerHTML = topCountries.map(country => 
-                        `<div class="country-dropdown-item" onclick="selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
-                    ).join('');
-                }
-            }
+            // Always show full list when focused/clicked, regardless of input value
+            const allCountries = COUNTRIES.slice(0, 200); // Show up to 200 countries
+            dropdown.innerHTML = allCountries.map(country => 
+                `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+            ).join('');
             dropdown.classList.remove('hidden');
         }
 
@@ -6041,8 +6021,16 @@
             const input = document.getElementById(inputId);
             if (input) {
                 input.value = country;
+                // Trigger both input and change events to ensure the value is synced
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                // Also trigger focus to keep the field active
+                input.focus();
             }
-            hideEditCountryDropdown(dropdownId);
+            // Use a small delay before hiding to ensure the value is set
+            setTimeout(() => {
+                hideEditCountryDropdown(dropdownId);
+            }, 100);
         }
 
         // Edit mode dropdown functions for Customer Source
@@ -6075,11 +6063,11 @@
                 // Show top sources if no match
                 const topSources = CUSTOMER_SOURCES.slice(0, 10);
                 dropdown.innerHTML = topSources.map(source => 
-                    `<div class="country-dropdown-item" onclick="selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
+                    `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
                 ).join('');
             } else {
                 dropdown.innerHTML = filtered.map(source => 
-                    `<div class="country-dropdown-item" onclick="selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
+                    `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
                 ).join('');
             }
             dropdown.classList.remove('hidden');
@@ -6105,31 +6093,11 @@
                 return;
             }
             
-            // Always show dropdown when focused, even if there's a value
-            if (input.value.trim() === '') {
-                const topSources = CUSTOMER_SOURCES.slice(0, 10);
-                dropdown.innerHTML = topSources.map(source => 
-                    `<div class="country-dropdown-item" onclick="selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
-                ).join('');
-            } else {
-                // Show filtered results, or all if no match
-                const searchTerm = input.value.toLowerCase().trim();
-                const filtered = CUSTOMER_SOURCES.filter(source => 
-                    source.toLowerCase().includes(searchTerm)
-                ).slice(0, 10);
-                
-                if (filtered.length > 0) {
-                    dropdown.innerHTML = filtered.map(source => 
-                        `<div class="country-dropdown-item" onclick="selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
-                    ).join('');
-                } else {
-                    // Show top sources if no match
-                    const topSources = CUSTOMER_SOURCES.slice(0, 10);
-                    dropdown.innerHTML = topSources.map(source => 
-                        `<div class="country-dropdown-item" onclick="selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
-                    ).join('');
-                }
-            }
+            // Always show full list when focused/clicked, regardless of input value
+            const allSources = CUSTOMER_SOURCES.slice(0, 200); // Show all sources
+            dropdown.innerHTML = allSources.map(source => 
+                `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
+            ).join('');
             dropdown.classList.remove('hidden');
         }
 
@@ -6144,8 +6112,16 @@
             const input = document.getElementById(inputId);
             if (input) {
                 input.value = source;
+                // Trigger both input and change events to ensure the value is synced
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                // Also trigger focus to keep the field active
+                input.focus();
             }
-            hideEditCustomerSourceDropdown(dropdownId);
+            // Use a small delay before hiding to ensure the value is set
+            setTimeout(() => {
+                hideEditCustomerSourceDropdown(dropdownId);
+            }, 100);
         }
 
         // Attachment handling functions
@@ -6435,7 +6411,7 @@
                                    oninput="filterEditCountry('${uniqueId}', '${dropdownId}')" 
                                    onfocus="showEditCountryDropdown('${uniqueId}', '${dropdownId}')" 
                                    onblur="setTimeout(() => hideEditCountryDropdown('${dropdownId}'), 200)">
-                            <div id="${dropdownId}" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; right: 0; min-width: 200px; z-index: 10000; max-height: 200px; overflow-y: auto; background-color: #ffffff; border: 1px solid #000000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+                            <div id="${dropdownId}" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; right: 0; min-width: 200px; z-index: 10000; max-height: 200px; overflow-y: auto; background-color: #ffffff; border: 1px solid #000000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" onmousedown="event.preventDefault();"></div>
                         </div>
                     `;
                 } else if (field === 'source') {
@@ -6452,7 +6428,7 @@
                                    oninput="filterEditCustomerSource('${uniqueId}', '${dropdownId}')" 
                                    onfocus="showEditCustomerSourceDropdown('${uniqueId}', '${dropdownId}')" 
                                    onblur="setTimeout(() => hideEditCustomerSourceDropdown('${dropdownId}'), 200)">
-                            <div id="${dropdownId}" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; right: 0; min-width: 200px; z-index: 10000; max-height: 200px; overflow-y: auto; background-color: #ffffff; border: 1px solid #000000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+                            <div id="${dropdownId}" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; right: 0; min-width: 200px; z-index: 10000; max-height: 200px; overflow-y: auto; background-color: #ffffff; border: 1px solid #000000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" onmousedown="event.preventDefault();"></div>
                         </div>
                     `;
                 } else {

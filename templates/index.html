@@ -6984,6 +6984,97 @@
             }, 100);
         }
 
+        // Edit mode dropdown functions for Customer Business Type
+        function filterEditCustomerBusinessType(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            if (!input || !dropdown) return;
+            
+            // Ensure customer business types are loaded
+            if (CUSTOMER_BUSINESS_TYPES.length === 0) {
+                fetch('/api/customer-business-types')
+                    .then(response => response.json())
+                    .then(types => {
+                        const sortedTypes = [...types].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        CUSTOMER_BUSINESS_TYPES = sortedTypes.map(t => t.name);
+                        filterEditCustomerBusinessType(inputId, dropdownId); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading customer business types:', error);
+                    });
+                return;
+            }
+            
+            const searchTerm = input.value.toLowerCase().trim();
+            const filtered = CUSTOMER_BUSINESS_TYPES.filter(type => 
+                type.toLowerCase().includes(searchTerm)
+            ).slice(0, 10);
+            
+            if (filtered.length === 0) {
+                // Show top types if no match
+                const topTypes = CUSTOMER_BUSINESS_TYPES.slice(0, 10);
+                dropdown.innerHTML = topTypes.map(type => 
+                    `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCustomerBusinessType('${inputId}', '${dropdownId}', '${type.replace(/'/g, "\\'")}')">${escapeHtml(type)}</div>`
+                ).join('');
+            } else {
+                dropdown.innerHTML = filtered.map(type => 
+                    `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCustomerBusinessType('${inputId}', '${dropdownId}', '${type.replace(/'/g, "\\'")}')">${escapeHtml(type)}</div>`
+                ).join('');
+            }
+            dropdown.classList.remove('hidden');
+        }
+
+        function showEditCustomerBusinessTypeDropdown(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            if (!input || !dropdown) return;
+            
+            // Ensure customer business types are loaded
+            if (CUSTOMER_BUSINESS_TYPES.length === 0) {
+                fetch('/api/customer-business-types')
+                    .then(response => response.json())
+                    .then(types => {
+                        const sortedTypes = [...types].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        CUSTOMER_BUSINESS_TYPES = sortedTypes.map(t => t.name);
+                        showEditCustomerBusinessTypeDropdown(inputId, dropdownId); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading customer business types:', error);
+                    });
+                return;
+            }
+            
+            // Always show full list when focused/clicked, regardless of input value
+            const allTypes = CUSTOMER_BUSINESS_TYPES.slice(0, 200); // Show all types
+            dropdown.innerHTML = allTypes.map(type => 
+                `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCustomerBusinessType('${inputId}', '${dropdownId}', '${type.replace(/'/g, "\\'")}')">${escapeHtml(type)}</div>`
+            ).join('');
+            dropdown.classList.remove('hidden');
+        }
+
+        function hideEditCustomerBusinessTypeDropdown(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        function selectEditCustomerBusinessType(inputId, dropdownId, type) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.value = type;
+                // Trigger both input and change events to ensure the value is synced
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                // Also trigger focus to keep the field active
+                input.focus();
+            }
+            // Use a small delay before hiding to ensure the value is set
+            setTimeout(() => {
+                hideEditCustomerBusinessTypeDropdown(dropdownId);
+            }, 100);
+        }
+
         // Attachment handling functions
         function handleDragOver(event) {
             event.preventDefault();
@@ -7280,7 +7371,7 @@
             const cells = row.querySelectorAll('.editable-cell');
             originalCustomerData[customerId] = {};
             
-            // Load countries and sources if needed, then create input fields
+            // Load countries, sources and business types if needed, then create input fields
             const loadPromises = [];
             
             if (COUNTRIES.length === 0) {
@@ -7309,6 +7400,21 @@
                         .catch(error => {
                             console.error('Error loading customer sources:', error);
                             CUSTOMER_SOURCES = []; // Ensure it's an array even on error
+                        })
+                );
+            }
+
+            if (CUSTOMER_BUSINESS_TYPES.length === 0) {
+                loadPromises.push(
+                    fetch('/api/customer-business-types')
+                        .then(response => response.json())
+                        .then(types => {
+                            const sortedTypes = [...types].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                            CUSTOMER_BUSINESS_TYPES = sortedTypes.map(t => t.name);
+                        })
+                        .catch(error => {
+                            console.error('Error loading customer business types:', error);
+                            CUSTOMER_BUSINESS_TYPES = []; // Ensure it's an array even on error
                         })
                 );
             }
@@ -7375,6 +7481,23 @@
                                    oninput="filterEditCustomerSource('${uniqueId}', '${dropdownId}')" 
                                    onfocus="showEditCustomerSourceDropdown('${uniqueId}', '${dropdownId}')" 
                                    onblur="setTimeout(() => hideEditCustomerSourceDropdown('${dropdownId}'), 200)">
+                            <div id="${dropdownId}" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; right: 0; min-width: 200px; z-index: 10000; max-height: 200px; overflow-y: auto; background-color: #ffffff; border: 1px solid #000000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" onmousedown="event.preventDefault();"></div>
+                        </div>
+                    `;
+                } else if (field === 'business_type') {
+                    // Create business type dropdown input
+                    const uniqueId = `edit-business-type-${customerId}`;
+                    const dropdownId = `edit-business-type-dropdown-${customerId}`;
+                    cell.innerHTML = `
+                        <div style="position: relative;">
+                            <input type="text" id="${uniqueId}" value="${escapeHtml(value)}" 
+                                   placeholder="Search or select business type" 
+                                   autocomplete="off" 
+                                   style="width: 100%; padding: 5px; border: 1px solid #000000; font-size: 12px;" 
+                                   data-field="${field}"
+                                   oninput="filterEditCustomerBusinessType('${uniqueId}', '${dropdownId}')" 
+                                   onfocus="showEditCustomerBusinessTypeDropdown('${uniqueId}', '${dropdownId}')" 
+                                   onblur="setTimeout(() => hideEditCustomerBusinessTypeDropdown('${dropdownId}'), 200)">
                             <div id="${dropdownId}" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; right: 0; min-width: 200px; z-index: 10000; max-height: 200px; overflow-y: auto; background-color: #ffffff; border: 1px solid #000000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" onmousedown="event.preventDefault();"></div>
                         </div>
                     `;

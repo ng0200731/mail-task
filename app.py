@@ -238,6 +238,26 @@ def initialize_database():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
+        # Customer sources table for dropdown options
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS customer_sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                display_order INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        # Initialize default customer sources if table is empty
+        cursor.execute("SELECT COUNT(*) as count FROM customer_sources")
+        if cursor.fetchone()['count'] == 0:
+            default_sources = [
+                ('2025 PT Jakarta Intl Expo', 1),
+                ('Sales Referral', 2)
+            ]
+            cursor.executemany("""
+                INSERT INTO customer_sources (name, display_order) VALUES (?, ?)
+            """, default_sources)
+        
         # Initialize or update countries list
         default_countries = [
             ('India', 1),
@@ -2073,6 +2093,120 @@ def handle_country(country_id):
                 return jsonify({'status': 'deleted', 'id': country_id})
             else:
                 return jsonify({'error': 'Country not found'}), 404
+        except Exception as exc:
+            return jsonify({'error': f'Database error: {str(exc)}'}), 500
+
+
+@app.route('/api/customer-sources', methods=['GET', 'POST'])
+def handle_customer_sources():
+    """Handle customer source retrieval and creation"""
+    if request.method == 'GET':
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            cursor.execute("SELECT id, name, display_order, created_at FROM customer_sources ORDER BY display_order, name")
+            sources = [dict(row) for row in cursor.fetchall()]
+            cursor.close()
+            connection.close()
+            return jsonify(sources)
+        except Exception as exc:
+            return jsonify({'error': f'Database error: {str(exc)}'}), 500
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            name = data.get('name', '').strip()
+            if not name:
+                return jsonify({'error': 'Customer source name is required'}), 400
+            
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            
+            # Check if name already exists
+            cursor.execute("SELECT id FROM customer_sources WHERE name = ?", (name,))
+            if cursor.fetchone():
+                cursor.close()
+                connection.close()
+                return jsonify({'error': 'Customer source with this name already exists'}), 400
+            
+            # Get max display_order
+            cursor.execute("SELECT MAX(display_order) as max_order FROM customer_sources")
+            max_order = cursor.fetchone()['max_order'] or 0
+            display_order = data.get('display_order', max_order + 1)
+            
+            cursor.execute("""
+                INSERT INTO customer_sources (name, display_order) VALUES (?, ?)
+            """, (name, display_order))
+            connection.commit()
+            source_id = cursor.lastrowid
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'id': source_id,
+                'name': name,
+                'display_order': display_order,
+                'status': 'created'
+            }), 201
+        except Exception as exc:
+            return jsonify({'error': f'Database error: {str(exc)}'}), 500
+
+
+@app.route('/api/customer-sources/<int:source_id>', methods=['PUT', 'DELETE'])
+def handle_customer_source(source_id):
+    """Handle customer source update and deletion"""
+    if request.method == 'PUT':
+        try:
+            data = request.get_json()
+            name = data.get('name', '').strip()
+            if not name:
+                return jsonify({'error': 'Customer source name is required'}), 400
+            
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            
+            # Check if name already exists for another source
+            cursor.execute("SELECT id FROM customer_sources WHERE name = ? AND id != ?", (name, source_id))
+            if cursor.fetchone():
+                cursor.close()
+                connection.close()
+                return jsonify({'error': 'Customer source with this name already exists'}), 400
+            
+            display_order = data.get('display_order', 0)
+            cursor.execute("""
+                UPDATE customer_sources SET name = ?, display_order = ? WHERE id = ?
+            """, (name, display_order, source_id))
+            connection.commit()
+            updated = cursor.rowcount > 0
+            cursor.close()
+            connection.close()
+            
+            if updated:
+                return jsonify({
+                    'id': source_id,
+                    'name': name,
+                    'display_order': display_order,
+                    'status': 'updated'
+                })
+            else:
+                return jsonify({'error': 'Customer source not found'}), 404
+        except Exception as exc:
+            return jsonify({'error': f'Database error: {str(exc)}'}), 500
+    
+    elif request.method == 'DELETE':
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            cursor.execute("DELETE FROM customer_sources WHERE id = ?", (source_id,))
+            connection.commit()
+            deleted = cursor.rowcount > 0
+            cursor.close()
+            connection.close()
+            
+            if deleted:
+                return jsonify({'status': 'deleted', 'id': source_id})
+            else:
+                return jsonify({'error': 'Customer source not found'}), 404
         except Exception as exc:
             return jsonify({'error': f'Database error: {str(exc)}'}), 500
 

@@ -1007,6 +1007,11 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
+            position: relative;
+        }
+        
+        .customer-table tbody {
+            position: relative;
         }
 
         .customer-table th,
@@ -1016,6 +1021,8 @@
             text-align: left;
             font-family: Arial, sans-serif;
             font-size: 14px;
+            position: relative;
+            overflow: visible;
         }
 
         .customer-table th {
@@ -1226,7 +1233,10 @@
                         </div>
                         <div class="form-group">
                             <label for="customer-source">Source</label>
-                            <input type="text" id="customer-source" placeholder="Enter source">
+                            <div style="position: relative;">
+                                <input type="text" id="customer-source" placeholder="Search or select source" autocomplete="off" oninput="filterCustomerSources()" onfocus="showCustomerSourceDropdown()" onblur="setTimeout(() => hideCustomerSourceDropdown(), 200)">
+                                <div id="customer-source-dropdown" class="country-dropdown hidden"></div>
+                            </div>
                         </div>
 
                         <!-- Row 4: Attachment (new line, full width) -->
@@ -1332,7 +1342,7 @@
                 <div>
                     <h3 id="task-type-dropdown-header" style="margin-bottom: 15px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px;" onclick="toggleTaskTypeDropdown()">
                         <span id="task-type-dropdown-icon" style="display: inline-block; transition: transform 0.2s;">▶</span>
-                        <span>Manage Task Type Dropdown</span>
+                        <span>Task - Type</span>
                     </h3>
                     <div id="task-type-dropdown-content" style="display: none;">
                         <div style="margin-bottom: 20px; position: relative;">
@@ -1347,7 +1357,7 @@
                     </div>
                     <h3 id="country-dropdown-header" style="margin-bottom: 15px; margin-top: 30px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px;" onclick="toggleCountryDropdown()">
                         <span id="country-dropdown-icon" style="display: inline-block; transition: transform 0.2s;">▶</span>
-                        <span>Manage Country Dropdown (Create Customer)</span>
+                        <span>Create Customer - Country</span>
                     </h3>
                     <div id="country-dropdown-content" style="display: none;">
                         <div style="margin-bottom: 20px; position: relative;">
@@ -1358,6 +1368,21 @@
                         </div>
                         <div id="countries-list" style="border: 1px solid #000000; padding: 15px; background-color: #ffffff;">
                             <div style="text-align: center; padding: 20px; color: #666;">Loading countries...</div>
+                        </div>
+                    </div>
+                    <h3 id="customer-source-dropdown-header" style="margin-bottom: 15px; margin-top: 30px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px;" onclick="toggleCustomerSourceDropdown()">
+                        <span id="customer-source-dropdown-icon" style="display: inline-block; transition: transform 0.2s;">▶</span>
+                        <span>Customer - Source</span>
+                    </h3>
+                    <div id="customer-source-dropdown-content" style="display: none;">
+                        <div style="margin-bottom: 20px; position: relative;">
+                            <input type="text" id="new-customer-source-input" placeholder="Enter new customer source name" style="width: 300px; padding: 8px; border: 1px solid #000000; margin-right: 10px;" onkeypress="if(event.key === 'Enter') addCustomerSource()" oninput="showCustomerSourceSuggestions()" onfocus="showCustomerSourceSuggestions()" onblur="setTimeout(() => hideCustomerSourceSuggestions(), 200)">
+                            <div id="customer-source-suggestions" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; width: 300px; z-index: 1000;"></div>
+                            <button class="form-button" onclick="addCustomerSource()" style="padding: 8px 20px;">Add New Source</button>
+                            <div id="customer-source-duplicate-warning" style="color: #dc3545; font-size: 12px; margin-top: 5px; display: none;"></div>
+                        </div>
+                        <div id="customer-sources-list" style="border: 1px solid #000000; padding: 15px; background-color: #ffffff;">
+                            <div style="text-align: center; padding: 20px; color: #666;">Loading customer sources...</div>
                         </div>
                     </div>
                 </div>
@@ -2032,6 +2057,8 @@
 
         // Country list - will be populated from database
         let COUNTRIES = [];
+        // Customer sources list - will be populated from database
+        let CUSTOMER_SOURCES = [];
         const PROVIDER_LABELS = {
             gmail: 'Gmail',
             qq: 'QQ',
@@ -2733,6 +2760,8 @@
             await loadCachedEmailsOnStartup();
             // Load countries for dropdown
             loadCountries();
+            // Load customer sources for dropdown
+            loadCustomerSources();
             document.addEventListener('keydown', (evt) => {
                 if (evt.key === 'Escape' && !emailModal.classList.contains('hidden')) {
                     closeEmailModal();
@@ -2800,6 +2829,13 @@
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
                 event.target.classList.add('active');
+            }
+            // Ensure countries and customer sources are loaded for dropdowns
+            if (COUNTRIES.length === 0) {
+                loadCountries();
+            }
+            if (CUSTOMER_SOURCES.length === 0) {
+                loadCustomerSources();
             }
             loadCustomers(true);
         }
@@ -5425,6 +5461,21 @@
             const dropdown = document.getElementById('country-dropdown');
             if (!input || !dropdown) return;
             
+            // Ensure countries are loaded
+            if (COUNTRIES.length === 0) {
+                fetch('/api/countries')
+                    .then(response => response.json())
+                    .then(countries => {
+                        const sortedCountries = [...countries].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        COUNTRIES = sortedCountries.map(c => c.name);
+                        filterCountries(); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading countries:', error);
+                    });
+                return;
+            }
+            
             const searchTerm = input.value.toLowerCase().trim();
             const filtered = COUNTRIES.filter(country => 
                 country.toLowerCase().includes(searchTerm)
@@ -5445,6 +5496,21 @@
             const input = document.getElementById('customer-country');
             const dropdown = document.getElementById('country-dropdown');
             if (!input || !dropdown) return;
+            
+            // Ensure countries are loaded
+            if (COUNTRIES.length === 0) {
+                fetch('/api/countries')
+                    .then(response => response.json())
+                    .then(countries => {
+                        const sortedCountries = [...countries].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        COUNTRIES = sortedCountries.map(c => c.name);
+                        showCountryDropdown(); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading countries:', error);
+                    });
+                return;
+            }
             
             if (input.value.trim() === '') {
                 const topCountries = COUNTRIES.slice(0, 10);
@@ -5470,6 +5536,616 @@
                 input.value = country;
             }
             hideCountryDropdown();
+        }
+
+        // Customer Sources Management Functions
+        let customerSourcesCache = [];
+
+        function toggleCustomerSourceDropdown() {
+            const content = document.getElementById('customer-source-dropdown-content');
+            const icon = document.getElementById('customer-source-dropdown-icon');
+            if (!content || !icon) return;
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.style.transform = 'rotate(90deg)';
+                loadCustomerSources();
+            } else {
+                content.style.display = 'none';
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function loadCustomerSources() {
+            fetch('/api/customer-sources')
+                .then(response => response.json())
+                .then(sources => {
+                    customerSourcesCache = sources;
+                    renderCustomerSourcesList(sources);
+                    updateCustomerSourceDropdown(sources);
+                })
+                .catch(error => {
+                    console.error('Error loading customer sources:', error);
+                    const container = document.getElementById('customer-sources-list');
+                    if (container) {
+                        container.innerHTML = '<div style="padding: 20px; color: #dc3545;">Error loading customer sources</div>';
+                    }
+                });
+        }
+
+        let currentCustomerSourceDragId = null;
+
+        function renderCustomerSourcesList(sources) {
+            const container = document.getElementById('customer-sources-list');
+            if (!container) return;
+            
+            if (!sources || sources.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">No customer sources found. Add one above.</div>';
+                return;
+            }
+            
+            // Sort by display_order
+            const sortedSources = [...sources].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            
+            container.innerHTML = sortedSources.map(source => `
+                <div class="task-type-item" draggable="true" 
+                     ondragstart="currentCustomerSourceDragId = ${source.id}; event.dataTransfer.effectAllowed = 'move';" 
+                     ondragover="event.preventDefault(); event.dataTransfer.dropEffect = 'move';" 
+                     ondrop="handleCustomerSourceDrop(event, ${source.id})" 
+                     ondragenter="event.preventDefault(); this.style.backgroundColor = '#e0e0e0';" 
+                     ondragleave="this.style.backgroundColor = '';" 
+                     style="padding: 10px; margin-bottom: 5px; border: 1px solid #ddd; background-color: #f9f9f9; cursor: move; display: flex; align-items: center; gap: 10px;">
+                    <span style="cursor: move; user-select: none;">☰</span>
+                    <input type="text" id="customer-source-name-${source.id}" value="${escapeHtml(source.name)}" 
+                           style="flex: 1; padding: 5px; border: 1px solid #000000;" 
+                           onblur="updateCustomerSource(${source.id})">
+                    <button class="form-button" onclick="deleteCustomerSource(${source.id})" style="padding: 5px 10px; font-size: 12px; background-color: #dc3545; color: white;">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        function showCustomerSourceSuggestions() {
+            const input = document.getElementById('new-customer-source-input');
+            const suggestionsDiv = document.getElementById('customer-source-suggestions');
+            const warningDiv = document.getElementById('customer-source-duplicate-warning');
+            
+            if (!input || !suggestionsDiv) return;
+            
+            const query = input.value.trim().toLowerCase();
+            
+            if (!query) {
+                suggestionsDiv.classList.add('hidden');
+                warningDiv.style.display = 'none';
+                return;
+            }
+            
+            // Check for duplicates
+            const existingSources = customerSourcesCache || [];
+            const isDuplicate = existingSources.some(source => 
+                source.name.toLowerCase() === query
+            );
+            
+            if (isDuplicate) {
+                suggestionsDiv.classList.add('hidden');
+                warningDiv.textContent = 'This customer source already exists!';
+                warningDiv.style.display = 'block';
+                input.style.borderColor = '#dc3545';
+                return;
+            } else {
+                warningDiv.style.display = 'none';
+                input.style.borderColor = '#000000';
+            }
+            
+            // Show similar suggestions
+            const similar = existingSources
+                .filter(source => source.name.toLowerCase().includes(query))
+                .slice(0, 5);
+            
+            if (similar.length === 0) {
+                suggestionsDiv.classList.add('hidden');
+                return;
+            }
+            
+            suggestionsDiv.innerHTML = similar.map(source => 
+                `<div class="country-dropdown-item" onclick="selectCustomerSourceSuggestion('${source.name.replace(/'/g, "\\'")}')">${escapeHtml(source.name)}</div>`
+            ).join('');
+            suggestionsDiv.classList.remove('hidden');
+        }
+
+        function hideCustomerSourceSuggestions() {
+            const suggestionsDiv = document.getElementById('customer-source-suggestions');
+            if (suggestionsDiv) {
+                suggestionsDiv.classList.add('hidden');
+            }
+        }
+
+        function selectCustomerSourceSuggestion(name) {
+            const input = document.getElementById('new-customer-source-input');
+            if (input) {
+                input.value = name;
+            }
+            hideCustomerSourceSuggestions();
+            showCustomerSourceSuggestions(); // Re-check for duplicates
+        }
+
+        function addCustomerSource() {
+            const input = document.getElementById('new-customer-source-input');
+            const warningDiv = document.getElementById('customer-source-duplicate-warning');
+            if (!input) return;
+            
+            const name = input.value.trim();
+            if (!name) {
+                alert('Customer source name cannot be empty');
+                return;
+            }
+            
+            // Check for duplicates before submitting
+            const existingSources = customerSourcesCache || [];
+            const isDuplicate = existingSources.some(source => 
+                source.name.toLowerCase() === name.toLowerCase()
+            );
+            
+            if (isDuplicate) {
+                warningDiv.textContent = 'This customer source already exists!';
+                warningDiv.style.display = 'block';
+                input.style.borderColor = '#dc3545';
+                input.focus();
+                return;
+            }
+            
+            fetch('/api/customer-sources', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    if (data.error.includes('already exists')) {
+                        warningDiv.textContent = 'This customer source already exists!';
+                        warningDiv.style.display = 'block';
+                        input.style.borderColor = '#dc3545';
+                        input.focus();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } else {
+                    input.value = '';
+                    warningDiv.style.display = 'none';
+                    input.style.borderColor = '#000000';
+                    hideCustomerSourceSuggestions();
+                    loadCustomerSources();
+                    setTimeout(() => {
+                        const suggestionsDiv = document.getElementById('customer-source-suggestions');
+                        if (suggestionsDiv) {
+                            suggestionsDiv.classList.add('hidden');
+                        }
+                    }, 100);
+                }
+            })
+            .catch(error => {
+                alert('Error adding customer source: ' + error.message);
+            });
+        }
+
+        function updateCustomerSource(sourceId) {
+            const nameInput = document.getElementById(`customer-source-name-${sourceId}`);
+            const name = nameInput.value.trim();
+            
+            if (!name) {
+                alert('Customer source name cannot be empty');
+                loadCustomerSources(); // Reload to reset
+                return;
+            }
+            
+            // Find current source to preserve display_order
+            const currentSource = customerSourcesCache.find(s => s.id === sourceId);
+            if (!currentSource) {
+                loadCustomerSources();
+                return;
+            }
+            
+            fetch(`/api/customer-sources/${sourceId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    display_order: currentSource.display_order || 0
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    loadCustomerSources(); // Reload to reset
+                } else {
+                    loadCustomerSources();
+                }
+            })
+            .catch(error => {
+                alert('Error updating customer source: ' + error.message);
+                loadCustomerSources(); // Reload to reset
+            });
+        }
+
+        function deleteCustomerSource(sourceId) {
+            if (!confirm('Are you sure you want to delete this customer source?')) {
+                return;
+            }
+            
+            fetch(`/api/customer-sources/${sourceId}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    loadCustomerSources();
+                }
+            })
+            .catch(error => {
+                alert('Error deleting customer source: ' + error.message);
+            });
+        }
+
+        function handleCustomerSourceDrop(event, targetId) {
+            event.preventDefault();
+            if (!currentCustomerSourceDragId || currentCustomerSourceDragId === targetId) {
+                currentCustomerSourceDragId = null;
+                return;
+            }
+            
+            const fromIndex = customerSourcesCache.findIndex(s => s.id === currentCustomerSourceDragId);
+            const toIndex = customerSourcesCache.findIndex(s => s.id === targetId);
+            
+            if (fromIndex === -1 || toIndex === -1) {
+                currentCustomerSourceDragId = null;
+                return;
+            }
+            
+            // Reorder in memory
+            const sortedSources = [...customerSourcesCache].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            const fromIndexSorted = sortedSources.findIndex(s => s.id === currentCustomerSourceDragId);
+            const toIndexSorted = sortedSources.findIndex(s => s.id === targetId);
+            
+            const [moved] = sortedSources.splice(fromIndexSorted, 1);
+            sortedSources.splice(toIndexSorted, 0, moved);
+            
+            // Re-assign display_order sequentially
+            sortedSources.forEach((source, index) => {
+                source.display_order = index + 1;
+            });
+            
+            // Persist all updated orders
+            Promise.all(sortedSources.map(source => 
+                fetch(`/api/customer-sources/${source.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: source.name,
+                        display_order: source.display_order
+                    })
+                })
+            ))
+            .then(responses => Promise.all(responses.map(r => r.json())))
+            .then(results => {
+                if (results.some(r => r.error)) {
+                    alert('Error updating order');
+                } else {
+                    loadCustomerSources();
+                }
+            })
+            .catch(error => {
+                alert('Error reordering customer sources: ' + error.message);
+            })
+            .finally(() => {
+                currentCustomerSourceDragId = null;
+            });
+        }
+
+        function updateCustomerSourceDropdown(sources) {
+            // Sort by display_order
+            const sortedSources = [...sources].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            
+            // Update CUSTOMER_SOURCES array for the source input field
+            CUSTOMER_SOURCES = sortedSources.map(s => s.name);
+            
+            // If source dropdown is visible, refresh it
+            const sourceInput = document.getElementById('customer-source');
+            const sourceDropdown = document.getElementById('customer-source-dropdown');
+            if (sourceInput && sourceDropdown && !sourceDropdown.classList.contains('hidden')) {
+                filterCustomerSources();
+            }
+        }
+
+        // Customer source dropdown functions for Create Customer form
+        function filterCustomerSources() {
+            const input = document.getElementById('customer-source');
+            const dropdown = document.getElementById('customer-source-dropdown');
+            if (!input || !dropdown) return;
+            
+            // Ensure customer sources are loaded
+            if (CUSTOMER_SOURCES.length === 0) {
+                fetch('/api/customer-sources')
+                    .then(response => response.json())
+                    .then(sources => {
+                        const sortedSources = [...sources].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        CUSTOMER_SOURCES = sortedSources.map(s => s.name);
+                        filterCustomerSources(); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading customer sources:', error);
+                    });
+                return;
+            }
+            
+            const searchTerm = input.value.toLowerCase().trim();
+            const filtered = CUSTOMER_SOURCES.filter(source => 
+                source.toLowerCase().includes(searchTerm)
+            ).slice(0, 10); // Show max 10 results
+            
+            if (filtered.length === 0 || searchTerm === '') {
+                dropdown.classList.add('hidden');
+                return;
+            }
+            
+            dropdown.innerHTML = filtered.map(source => 
+                `<div class="country-dropdown-item" onclick="selectCustomerSource('${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
+            ).join('');
+            dropdown.classList.remove('hidden');
+        }
+
+        function showCustomerSourceDropdown() {
+            const input = document.getElementById('customer-source');
+            const dropdown = document.getElementById('customer-source-dropdown');
+            if (!input || !dropdown) return;
+            
+            // Ensure customer sources are loaded
+            if (CUSTOMER_SOURCES.length === 0) {
+                fetch('/api/customer-sources')
+                    .then(response => response.json())
+                    .then(sources => {
+                        const sortedSources = [...sources].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        CUSTOMER_SOURCES = sortedSources.map(s => s.name);
+                        showCustomerSourceDropdown(); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading customer sources:', error);
+                    });
+                return;
+            }
+            
+            if (input.value.trim() === '') {
+                const topSources = CUSTOMER_SOURCES.slice(0, 10);
+                dropdown.innerHTML = topSources.map(source => 
+                    `<div class="country-dropdown-item" onclick="selectCustomerSource('${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
+                ).join('');
+                dropdown.classList.remove('hidden');
+            } else {
+                filterCustomerSources();
+            }
+        }
+
+        function hideCustomerSourceDropdown() {
+            const dropdown = document.getElementById('customer-source-dropdown');
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        function selectCustomerSource(source) {
+            const input = document.getElementById('customer-source');
+            if (input) {
+                input.value = source;
+            }
+            hideCustomerSourceDropdown();
+        }
+
+        // Edit mode dropdown functions for Country
+        function filterEditCountry(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            if (!input || !dropdown) return;
+            
+            // Ensure countries are loaded
+            if (COUNTRIES.length === 0) {
+                fetch('/api/countries')
+                    .then(response => response.json())
+                    .then(countries => {
+                        const sortedCountries = [...countries].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        COUNTRIES = sortedCountries.map(c => c.name);
+                        filterEditCountry(inputId, dropdownId); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading countries:', error);
+                    });
+                return;
+            }
+            
+            const searchTerm = input.value.toLowerCase().trim();
+            const filtered = COUNTRIES.filter(country => 
+                country.toLowerCase().includes(searchTerm)
+            ).slice(0, 10);
+            
+            if (filtered.length === 0) {
+                // Show top countries if no match
+                const topCountries = COUNTRIES.slice(0, 10);
+                dropdown.innerHTML = topCountries.map(country => 
+                    `<div class="country-dropdown-item" onclick="selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                ).join('');
+            } else {
+                dropdown.innerHTML = filtered.map(country => 
+                    `<div class="country-dropdown-item" onclick="selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                ).join('');
+            }
+            dropdown.classList.remove('hidden');
+        }
+
+        function showEditCountryDropdown(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            if (!input || !dropdown) return;
+            
+            // Ensure countries are loaded
+            if (COUNTRIES.length === 0) {
+                fetch('/api/countries')
+                    .then(response => response.json())
+                    .then(countries => {
+                        const sortedCountries = [...countries].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        COUNTRIES = sortedCountries.map(c => c.name);
+                        showEditCountryDropdown(inputId, dropdownId); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading countries:', error);
+                    });
+                return;
+            }
+            
+            // Always show dropdown when focused, even if there's a value
+            if (input.value.trim() === '') {
+                const topCountries = COUNTRIES.slice(0, 10);
+                dropdown.innerHTML = topCountries.map(country => 
+                    `<div class="country-dropdown-item" onclick="selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                ).join('');
+            } else {
+                // Show filtered results, or all if no match
+                const searchTerm = input.value.toLowerCase().trim();
+                const filtered = COUNTRIES.filter(country => 
+                    country.toLowerCase().includes(searchTerm)
+                ).slice(0, 10);
+                
+                if (filtered.length > 0) {
+                    dropdown.innerHTML = filtered.map(country => 
+                        `<div class="country-dropdown-item" onclick="selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                    ).join('');
+                } else {
+                    // Show top countries if no match
+                    const topCountries = COUNTRIES.slice(0, 10);
+                    dropdown.innerHTML = topCountries.map(country => 
+                        `<div class="country-dropdown-item" onclick="selectEditCountry('${inputId}', '${dropdownId}', '${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                    ).join('');
+                }
+            }
+            dropdown.classList.remove('hidden');
+        }
+
+        function hideEditCountryDropdown(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        function selectEditCountry(inputId, dropdownId, country) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.value = country;
+            }
+            hideEditCountryDropdown(dropdownId);
+        }
+
+        // Edit mode dropdown functions for Customer Source
+        function filterEditCustomerSource(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            if (!input || !dropdown) return;
+            
+            // Ensure customer sources are loaded
+            if (CUSTOMER_SOURCES.length === 0) {
+                fetch('/api/customer-sources')
+                    .then(response => response.json())
+                    .then(sources => {
+                        const sortedSources = [...sources].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        CUSTOMER_SOURCES = sortedSources.map(s => s.name);
+                        filterEditCustomerSource(inputId, dropdownId); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading customer sources:', error);
+                    });
+                return;
+            }
+            
+            const searchTerm = input.value.toLowerCase().trim();
+            const filtered = CUSTOMER_SOURCES.filter(source => 
+                source.toLowerCase().includes(searchTerm)
+            ).slice(0, 10);
+            
+            if (filtered.length === 0) {
+                // Show top sources if no match
+                const topSources = CUSTOMER_SOURCES.slice(0, 10);
+                dropdown.innerHTML = topSources.map(source => 
+                    `<div class="country-dropdown-item" onclick="selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
+                ).join('');
+            } else {
+                dropdown.innerHTML = filtered.map(source => 
+                    `<div class="country-dropdown-item" onclick="selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
+                ).join('');
+            }
+            dropdown.classList.remove('hidden');
+        }
+
+        function showEditCustomerSourceDropdown(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            if (!input || !dropdown) return;
+            
+            // Ensure customer sources are loaded
+            if (CUSTOMER_SOURCES.length === 0) {
+                fetch('/api/customer-sources')
+                    .then(response => response.json())
+                    .then(sources => {
+                        const sortedSources = [...sources].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        CUSTOMER_SOURCES = sortedSources.map(s => s.name);
+                        showEditCustomerSourceDropdown(inputId, dropdownId); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading customer sources:', error);
+                    });
+                return;
+            }
+            
+            // Always show dropdown when focused, even if there's a value
+            if (input.value.trim() === '') {
+                const topSources = CUSTOMER_SOURCES.slice(0, 10);
+                dropdown.innerHTML = topSources.map(source => 
+                    `<div class="country-dropdown-item" onclick="selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
+                ).join('');
+            } else {
+                // Show filtered results, or all if no match
+                const searchTerm = input.value.toLowerCase().trim();
+                const filtered = CUSTOMER_SOURCES.filter(source => 
+                    source.toLowerCase().includes(searchTerm)
+                ).slice(0, 10);
+                
+                if (filtered.length > 0) {
+                    dropdown.innerHTML = filtered.map(source => 
+                        `<div class="country-dropdown-item" onclick="selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
+                    ).join('');
+                } else {
+                    // Show top sources if no match
+                    const topSources = CUSTOMER_SOURCES.slice(0, 10);
+                    dropdown.innerHTML = topSources.map(source => 
+                        `<div class="country-dropdown-item" onclick="selectEditCustomerSource('${inputId}', '${dropdownId}', '${source.replace(/'/g, "\\'")}')">${escapeHtml(source)}</div>`
+                    ).join('');
+                }
+            }
+            dropdown.classList.remove('hidden');
+        }
+
+        function hideEditCustomerSourceDropdown(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        function selectEditCustomerSource(inputId, dropdownId, source) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.value = source;
+            }
+            hideEditCustomerSourceDropdown(dropdownId);
         }
 
         // Attachment handling functions
@@ -5677,10 +6353,49 @@
             const row = document.getElementById(`customer-row-${customerId}`);
             if (!row) return;
             
-            // Store original data
+            // Store original data first
             const cells = row.querySelectorAll('.editable-cell');
             originalCustomerData[customerId] = {};
-            cells.forEach(cell => {
+            
+            // Load countries and sources if needed, then create input fields
+            const loadPromises = [];
+            
+            if (COUNTRIES.length === 0) {
+                loadPromises.push(
+                    fetch('/api/countries')
+                        .then(response => response.json())
+                        .then(countries => {
+                            const sortedCountries = [...countries].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                            COUNTRIES = sortedCountries.map(c => c.name);
+                        })
+                        .catch(error => {
+                            console.error('Error loading countries:', error);
+                            COUNTRIES = []; // Ensure it's an array even on error
+                        })
+                );
+            }
+            
+            if (CUSTOMER_SOURCES.length === 0) {
+                loadPromises.push(
+                    fetch('/api/customer-sources')
+                        .then(response => response.json())
+                        .then(sources => {
+                            const sortedSources = [...sources].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                            CUSTOMER_SOURCES = sortedSources.map(s => s.name);
+                        })
+                        .catch(error => {
+                            console.error('Error loading customer sources:', error);
+                            CUSTOMER_SOURCES = []; // Ensure it's an array even on error
+                        })
+                );
+            }
+            
+            // Wait for data to load, then create input fields
+            Promise.all(loadPromises).then(() => {
+                // Make sure we're still editing the same customer
+                if (editingCustomerId !== customerId) return;
+                
+                cells.forEach(cell => {
                 const field = cell.dataset.field;
                 let value = '';
                 
@@ -5706,16 +6421,51 @@
                     // Strip HTML tags for editing (show plain text)
                     const textValue = cell.textContent.trim();
                     cell.innerHTML = `<textarea style="width: 100%; min-height: 60px; padding: 5px; border: 1px solid #000000; font-family: Arial, sans-serif; font-size: 12px;" data-field="${field}">${escapeHtml(textValue)}</textarea>`;
+                } else if (field === 'country') {
+                    // Create country dropdown input
+                    const uniqueId = `edit-country-${customerId}`;
+                    const dropdownId = `edit-country-dropdown-${customerId}`;
+                    cell.innerHTML = `
+                        <div style="position: relative;">
+                            <input type="text" id="${uniqueId}" value="${escapeHtml(value)}" 
+                                   placeholder="Search or select country" 
+                                   autocomplete="off" 
+                                   style="width: 100%; padding: 5px; border: 1px solid #000000; font-size: 12px;" 
+                                   data-field="${field}"
+                                   oninput="filterEditCountry('${uniqueId}', '${dropdownId}')" 
+                                   onfocus="showEditCountryDropdown('${uniqueId}', '${dropdownId}')" 
+                                   onblur="setTimeout(() => hideEditCountryDropdown('${dropdownId}'), 200)">
+                            <div id="${dropdownId}" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; right: 0; min-width: 200px; z-index: 10000; max-height: 200px; overflow-y: auto; background-color: #ffffff; border: 1px solid #000000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+                        </div>
+                    `;
+                } else if (field === 'source') {
+                    // Create source dropdown input
+                    const uniqueId = `edit-source-${customerId}`;
+                    const dropdownId = `edit-source-dropdown-${customerId}`;
+                    cell.innerHTML = `
+                        <div style="position: relative;">
+                            <input type="text" id="${uniqueId}" value="${escapeHtml(value)}" 
+                                   placeholder="Search or select source" 
+                                   autocomplete="off" 
+                                   style="width: 100%; padding: 5px; border: 1px solid #000000; font-size: 12px;" 
+                                   data-field="${field}"
+                                   oninput="filterEditCustomerSource('${uniqueId}', '${dropdownId}')" 
+                                   onfocus="showEditCustomerSourceDropdown('${uniqueId}', '${dropdownId}')" 
+                                   onblur="setTimeout(() => hideEditCustomerSourceDropdown('${dropdownId}'), 200)">
+                            <div id="${dropdownId}" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; right: 0; min-width: 200px; z-index: 10000; max-height: 200px; overflow-y: auto; background-color: #ffffff; border: 1px solid #000000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+                        </div>
+                    `;
                 } else {
                     cell.innerHTML = `<input type="text" value="${escapeHtml(value)}" style="width: 100%; padding: 5px; border: 1px solid #000000; font-size: 12px;" data-field="${field}">`;
                 }
                 cell.style.backgroundColor = '#fff9c4';
+                });
+                
+                // Show/hide buttons
+                row.querySelector('.edit-customer-btn').classList.add('hidden');
+                row.querySelector('.save-customer-btn').classList.remove('hidden');
+                row.querySelector('.cancel-customer-btn').classList.remove('hidden');
             });
-            
-            // Show/hide buttons
-            row.querySelector('.edit-customer-btn').classList.add('hidden');
-            row.querySelector('.save-customer-btn').classList.remove('hidden');
-            row.querySelector('.cancel-customer-btn').classList.remove('hidden');
         }
 
         function cancelCustomerEdit(customerId) {

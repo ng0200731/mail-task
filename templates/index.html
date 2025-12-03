@@ -1179,6 +1179,11 @@
             border-color: #0066cc;
         }
 
+        .input-error {
+            border-color: #dc3545 !important;
+            box-shadow: 0 0 0 1px rgba(220, 53, 69, 0.3);
+        }
+
         .attachment-drop-content {
             pointer-events: none;
         }
@@ -1334,15 +1339,12 @@
                         <!-- Row 4: Attachment (new line, full width) -->
                         <div class="form-group form-group-full">
                             <label>Attachment</label>
-                            <div id="customer-attachment-area" class="attachment-drop-area" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="document.getElementById('customer-attachment-input').click()">
-                                <div class="attachment-drop-content">
-                                    <div style="font-size: 24px; margin-bottom: 10px;">📎</div>
-                                    <div>Drag and drop files here or click to select</div>
-                                    <div style="font-size: 12px; color: #666; margin-top: 5px;">Multiple files supported</div>
-                                </div>
-                                <input type="file" id="customer-attachment-input" multiple style="display: none;" onchange="handleAttachmentSelect(event)">
+                            <div id="customer-attachment-dropzone" tabindex="0" style="border: 2px dashed #000000; padding: 20px; text-align: center; background-color: #f9f9f9; min-height: 100px; margin-bottom: 15px;">
+                                <p style="margin: 0; color: #666;">Drag and drop files here, click the Browse button, or paste images (Ctrl+V)</p>
+                                <button type="button" id="customer-attachment-browse-btn" class="form-button" style="margin-top: 12px; padding: 8px 20px;">Browse</button>
+                                <input type="file" id="customer-attachment-file-input" multiple style="display: none;" onchange="handleCustomerAttachmentFileSelect(event)">
                             </div>
-                            <div id="customer-attachment-list" class="attachment-list"></div>
+                            <div id="customer-attachment-list"></div>
                         </div>
 
                         <!-- Row 5: Remark (new line, full width) -->
@@ -3031,6 +3033,8 @@
             if (CUSTOMER_SOURCES.length === 0) {
                 loadCustomerSources();
             }
+            // Ensure attachment drag & drop is initialized
+            setupCustomerAttachmentDragAndDrop();
             loadCustomers(true);
         }
 
@@ -7111,90 +7115,133 @@
             }, 100);
         }
 
-        // Attachment handling functions
-        function handleDragOver(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            const dropArea = document.getElementById('customer-attachment-area');
-            if (dropArea) {
-                dropArea.classList.add('drag-over');
-            }
-        }
-
-        function handleDragLeave(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            const dropArea = document.getElementById('customer-attachment-area');
-            if (dropArea) {
-                dropArea.classList.remove('drag-over');
-            }
-        }
-
-        function handleDrop(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            const dropArea = document.getElementById('customer-attachment-area');
-            if (dropArea) {
-                dropArea.classList.remove('drag-over');
-            }
+        // Attachment handling functions for Create Customer (mirror task form attachments)
+        function setupCustomerAttachmentDragAndDrop() {
+            const dropzone = document.getElementById('customer-attachment-dropzone');
+            const fileInput = document.getElementById('customer-attachment-file-input');
+            const browseButton = document.getElementById('customer-attachment-browse-btn');
             
-            const files = event.dataTransfer.files;
-            addAttachments(Array.from(files));
-        }
+            if (!dropzone || !fileInput || !browseButton) return;
+            
+            // Dedicated browse button to open file picker
+            browseButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                fileInput.click();
+            });
+            
+            // Drag and drop handlers
+            dropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropzone.style.backgroundColor = '#e9e9e9';
+            });
+            
+            dropzone.addEventListener('dragleave', () => {
+                dropzone.style.backgroundColor = '#f9f9f9';
+            });
+            
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.style.backgroundColor = '#f9f9f9';
+                const files = Array.from(e.dataTransfer.files);
+                handleCustomerAttachmentFiles(files);
+            });
 
-        function handleAttachmentSelect(event) {
-            const files = event.target.files;
-            if (files && files.length > 0) {
-                addAttachments(Array.from(files));
-            }
-        }
-
-        function addAttachments(files) {
-            files.forEach(file => {
-                // Check if file already exists
-                if (customerAttachments.some(att => att.name === file.name && att.size === file.size)) {
+            // Paste image from clipboard
+            dropzone.addEventListener('paste', (e) => {
+                const clipboardData = e.clipboardData || window.clipboardData;
+                if (!clipboardData || !clipboardData.items) {
                     return;
                 }
-                
+                const files = [];
+                for (let i = 0; i < clipboardData.items.length; i++) {
+                    const item = clipboardData.items[i];
+                    if (item.kind === 'file') {
+                        const file = item.getAsFile();
+                        if (file && file.type && file.type.startsWith('image/')) {
+                            files.push(file);
+                        }
+                    }
+                }
+                if (files.length > 0) {
+                    e.preventDefault();
+                    handleCustomerAttachmentFiles(files);
+                }
+            });
+        }
+
+        function handleCustomerAttachmentFileSelect(event) {
+            const files = Array.from(event.target.files || []);
+            handleCustomerAttachmentFiles(files);
+        }
+
+        function handleCustomerAttachmentFiles(files) {
+            if (!Array.isArray(files) || files.length === 0) return;
+            
+            files.forEach(file => {
                 const reader = new FileReader();
-                reader.onload = function(e) {
-                    const base64Data = e.target.result.split(',')[1]; // Remove data:type;base64, prefix
+                reader.onload = (e) => {
+                    const base64Data = e.target.result.split(',')[1];
                     customerAttachments.push({
                         filename: file.name,
-                        size: file.size,
                         content_type: file.type || 'application/octet-stream',
-                        data: base64Data
+                        size: file.size,
+                        data: base64Data,
+                        caption: ''
                     });
-                    updateAttachmentList();
+                    renderCustomerAttachmentsList();
                 };
                 reader.readAsDataURL(file);
             });
         }
 
-        function removeAttachment(index) {
-            customerAttachments.splice(index, 1);
-            updateAttachmentList();
-        }
-
-        function updateAttachmentList() {
-            const listDiv = document.getElementById('customer-attachment-list');
-            if (!listDiv) return;
+        function renderCustomerAttachmentsList() {
+            const container = document.getElementById('customer-attachment-list');
+            if (!container) return;
             
-            if (customerAttachments.length === 0) {
-                listDiv.innerHTML = '';
+            if (!customerAttachments || customerAttachments.length === 0) {
+                container.innerHTML = '';
                 return;
             }
             
-            listDiv.innerHTML = customerAttachments.map((att, index) => {
-                const sizeStr = formatAttachmentSize(att.size);
+            container.innerHTML = customerAttachments.map((att, idx) => {
+                const filename = escapeHtml(att.filename || 'attachment');
+                const size = formatAttachmentSize(att.size || 0);
+                const contentType = att.content_type || 'application/octet-stream';
+                const isImage = (contentType || '').toLowerCase().startsWith('image/');
+                const thumbHtml = isImage
+                    ? `<img src="data:${contentType};base64,${att.data}" alt="${filename}" class="task-attachment-thumb" data-index="${idx}" onclick="openCreateCustomerAttachmentPreview(${idx})">`
+                    : '';
                 return `
-                    <div class="attachment-item">
-                        <span class="attachment-item-name">📎 ${escapeHtml(att.filename)}</span>
-                        <span class="attachment-item-size">${sizeStr}</span>
-                        <span class="attachment-item-remove" onclick="removeAttachment(${index})" title="Remove">✕</span>
+                    <div class="task-attachment-display" style="margin-bottom: 10px; display: flex; align-items: flex-start;">
+                        ${thumbHtml}
+                        <div class="task-attachment-info" style="flex: 1;">
+                            <div style="font-weight: bold;">${filename}</div>
+                            <div style="font-size: 12px; color: #666;">${contentType} • ${size}</div>
+                        </div>
+                        <div class="task-attachment-actions">
+                            <button type="button" class="form-button" onclick="removeCustomerAttachment(${idx})" style="font-size: 12px; background-color: #dc3545; color: white;">X</button>
+                        </div>
                     </div>
                 `;
             }).join('');
+        }
+
+        function removeCustomerAttachment(index) {
+            if (!customerAttachments || !customerAttachments[index]) {
+                return;
+            }
+            customerAttachments.splice(index, 1);
+            renderCustomerAttachmentsList();
+        }
+
+        function openCreateCustomerAttachmentPreview(attachmentIndex) {
+            if (!customerAttachments || !customerAttachments[attachmentIndex]) {
+                return;
+            }
+            const att = customerAttachments[attachmentIndex];
+            const contentType = att.content_type || 'application/octet-stream';
+            const filename = att.filename || `Attachment ${attachmentIndex + 1}`;
+            openPreviewModal(att.data || '', contentType, filename);
         }
 
         function formatAttachmentSize(bytes) {
@@ -7276,8 +7323,19 @@
             const businessType = (businessTypeSelect && businessTypeSelect.value || '').trim();
             const remark = remarkDiv ? remarkDiv.innerHTML.trim() : '';
 
+            // Clear previous validation highlights
+            const customerForm = document.querySelector('#create-customer-content');
+            if (customerForm) {
+                customerForm.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
+            }
+
             const contacts = collectCustomerContacts();
             if (!contacts.length) {
+                // Highlight primary name/email as required
+                const primaryNameInput = document.getElementById('customer-name');
+                const primaryEmailInput = document.getElementById('customer-email-address');
+                if (primaryNameInput) primaryNameInput.classList.add('input-error');
+                if (primaryEmailInput) primaryEmailInput.classList.add('input-error');
                 showCustomerStatus('Please enter at least one customer name and email.', true);
                 return;
             }
@@ -7288,14 +7346,36 @@
                 const name = (contact.name || '').trim();
                 const emailAddress = (contact.email || '').trim();
                 if (!name) {
+                    // Highlight offending name input(s)
+                    const allNameInputs = document.querySelectorAll('.contact-name, #customer-name');
+                    allNameInputs.forEach(input => {
+                        if ((input.value || '').trim() === '') {
+                            input.classList.add('input-error');
+                        }
+                    });
                     showCustomerStatus('Customer name is required for each contact.', true);
                     return;
                 }
                 if (!emailAddress) {
+                    // Highlight offending email input(s)
+                    const allEmailInputs = document.querySelectorAll('.contact-email, #customer-email-address');
+                    allEmailInputs.forEach(input => {
+                        if ((input.value || '').trim() === '') {
+                            input.classList.add('input-error');
+                        }
+                    });
                     showCustomerStatus('Please enter an email address for each contact.', true);
                     return;
                 }
                 if (!emailRegex.test(emailAddress)) {
+                    // Highlight invalid email input(s)
+                    const allEmailInputs = document.querySelectorAll('.contact-email, #customer-email-address');
+                    allEmailInputs.forEach(input => {
+                        const value = (input.value || '').trim();
+                        if (value && !emailRegex.test(value)) {
+                            input.classList.add('input-error');
+                        }
+                    });
                     showCustomerStatus('Please enter a valid email address (e.g. customer@example.com) for each contact.', true);
                     return;
                 }
@@ -7352,21 +7432,35 @@
                     const titleInput = document.getElementById('customer-title');
                     const emailInput = document.getElementById('customer-email-address');
                     const telInput = document.getElementById('customer-tel');
+                    const businessTypeInput = document.getElementById('customer-business-type');
+                    const extraContainer = document.getElementById('customer-extra-contacts-container');
+                    const attachmentFileInput = document.getElementById('customer-attachment-file-input');
+
+                    // Reset primary contact fields
                     if (nameInput) nameInput.value = '';
                     if (titleInput) titleInput.value = '';
-                    if (companyInput) companyInput.value = '';
                     if (emailInput) emailInput.value = '';
                     if (telInput) telInput.value = '';
+
+                    // Reset company and meta fields
+                    if (companyInput) companyInput.value = '';
                     if (countryInput) countryInput.value = '';
+                    if (addressInput) addressInput.value = '';
                     if (websiteInput) websiteInput.value = '';
                     if (sourceInput) sourceInput.value = '';
+                    if (businessTypeInput) businessTypeInput.value = '';
+
+                    // Reset remark
                     if (remarkDiv) remarkDiv.innerHTML = '';
-                    const extraContainer = document.getElementById('customer-extra-contacts-container');
+
+                    // Remove extra contact rows
                     if (extraContainer) extraContainer.innerHTML = '';
+
+                    // Clear attachments both in memory and UI
                     customerAttachments = [];
-                    updateAttachmentList();
-                    const attachmentInput = document.getElementById('customer-attachment-input');
-                    if (attachmentInput) attachmentInput.value = '';
+                    renderCustomerAttachmentsList();
+                    if (attachmentFileInput) attachmentFileInput.value = '';
+
                     showCustomerStatus('Customer(s) saved.', false);
                     loadCustomers(false);
                 })

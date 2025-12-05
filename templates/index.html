@@ -4127,7 +4127,10 @@
                     <input type="text" id="country-name-${country.id}" value="${escapeHtml(country.name)}" 
                            style="flex: 1; padding: 5px; border: 1px solid #000000;" 
                            onblur="updateCountry(${country.id})">
-                    <button class="form-button" onclick="deleteCountry(${country.id})" style="padding: 5px 10px; font-size: 12px; background-color: #dc3545; color: white;">Delete</button>
+                    <div style="margin-left: 15px; display: flex; gap: 5px;">
+                        <button class="form-button" onclick="updateCountry(${country.id})" style="padding: 5px 15px; font-size: 12px;">Save</button>
+                        <button class="form-button" onclick="deleteCountry(${country.id})" style="padding: 5px 15px; font-size: 12px; background-color: #dc3545; color: white;">Delete</button>
+                    </div>
                 </div>
             `).join('');
         }
@@ -5919,7 +5922,7 @@
                                             <th>Source</th>
                                             <th>Last Updated</th>
                                             <th>Attachments</th>
-                                            <th>Delete</th>
+                                            <th>Action</th>
                                         </tr>
                                         <tr>
                                             <th><input type="text" class="task-filter-input" data-field="sequence" placeholder="Filter sequence"></th>
@@ -6662,7 +6665,10 @@
                     <input type="text" id="customer-source-name-${source.id}" value="${escapeHtml(source.name)}" 
                            style="flex: 1; padding: 5px; border: 1px solid #000000;" 
                            onblur="updateCustomerSource(${source.id})">
-                    <button class="form-button" onclick="deleteCustomerSource(${source.id})" style="padding: 5px 10px; font-size: 12px; background-color: #dc3545; color: white;">Delete</button>
+                    <div style="margin-left: 15px; display: flex; gap: 5px;">
+                        <button class="form-button" onclick="updateCustomerSource(${source.id})" style="padding: 5px 15px; font-size: 12px;">Save</button>
+                        <button class="form-button" onclick="deleteCustomerSource(${source.id})" style="padding: 5px 15px; font-size: 12px; background-color: #dc3545; color: white;">Delete</button>
+                    </div>
                 </div>
             `).join('');
         }
@@ -6984,7 +6990,10 @@
                     <input type="text" id="customer-business-type-name-${type.id}" value="${escapeHtml(type.name)}" 
                            style="flex: 1; padding: 5px; border: 1px solid #000000;" 
                            onblur="updateCustomerBusinessType(${type.id})">
-                    <button class="form-button" onclick="deleteCustomerBusinessType(${type.id})" style="padding: 5px 10px; font-size: 12px; background-color: #dc3545; color: white;">Delete</button>
+                    <div style="margin-left: 15px; display: flex; gap: 5px;">
+                        <button class="form-button" onclick="updateCustomerBusinessType(${type.id})" style="padding: 5px 15px; font-size: 12px;">Save</button>
+                        <button class="form-button" onclick="deleteCustomerBusinessType(${type.id})" style="padding: 5px 15px; font-size: 12px; background-color: #dc3545; color: white;">Delete</button>
+                    </div>
                 </div>
             `).join('');
         }

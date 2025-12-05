@@ -2003,14 +2003,16 @@
                     </div>
                 </div>
                 <div class="form-group" style="flex: 1; display: flex; flex-direction: column;">
+                    <label for="task-extra-info">Extra Information</label>
+                    <textarea id="task-extra-info" rows="3" style="width: 100%; padding: 8px; border: 1px solid #000000; font-family: Arial, sans-serif; font-size: 13px; resize: vertical; margin-bottom: 15px;" placeholder="Enter extra information here..."></textarea>
                     <label for="task-notes">Context</label>
-                    <div id="task-email-details" style="margin-bottom: 15px; padding: 12px; background-color: #f5f5f5; border: 1px solid #d0d0d0; font-family: Arial, sans-serif; font-size: 13px; color: #333; display: none;">
+                    <div id="task-notes-editor" style="height: 300px; background-color: #ffffff; margin-bottom: 15px;"></div>
+                    <div id="task-email-details" style="padding: 12px; background-color: #f5f5f5; border: 1px solid #d0d0d0; font-family: Arial, sans-serif; font-size: 13px; color: #333; display: none;">
                         <div style="margin-bottom: 8px;"><strong>寄件者:</strong> <span id="task-email-from"></span></div>
                         <div style="margin-bottom: 8px;"><strong>寄件日期:</strong> <span id="task-email-date"></span></div>
                         <div style="margin-bottom: 8px;"><strong>收件者:</strong> <span id="task-email-to"></span></div>
                         <div><strong>主旨:</strong> <span id="task-email-subject"></span></div>
                     </div>
-                    <div id="task-notes-editor" style="height: 300px; background-color: #ffffff;"></div>
                 </div>
                 <div class="form-group">
                     <label>Attachments</label>
@@ -2070,6 +2072,23 @@
         </div>
     </div>
 
+    <div id="history-modal" class="modal hidden" onclick="closeHistoryModal()" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
+        <div class="modal-dialog" onclick="event.stopPropagation();" style="max-width: 90%; width: 1200px; max-height: 90vh;">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-title" id="history-modal-title">Customer Conversation History</div>
+                    <div class="modal-meta" id="history-modal-meta"></div>
+                </div>
+                <button class="modal-close" onclick="closeHistoryModal()">Close</button>
+            </div>
+            <div class="modal-body" style="max-height: calc(90vh - 120px); overflow-y: auto;">
+                <div id="history-email-list" class="email-list"></div>
+                <div id="history-loading" class="message info" style="text-align: center; padding: 20px;">Loading conversation history...</div>
+                <div id="history-empty" class="message info hidden" style="text-align: center; padding: 20px;">No emails found for this customer.</div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const VERSION = '{{ version }}';
         document.getElementById('version').textContent = 'v' + VERSION;
@@ -2083,6 +2102,12 @@
         const previewModalTitle = document.getElementById('preview-modal-title');
         const previewModalContent = document.getElementById('preview-modal-content');
         const taskModal = document.getElementById('task-modal');
+        const historyModal = document.getElementById('history-modal');
+        const historyModalTitle = document.getElementById('history-modal-title');
+        const historyModalMeta = document.getElementById('history-modal-meta');
+        const historyEmailList = document.getElementById('history-email-list');
+        const historyLoading = document.getElementById('history-loading');
+        const historyEmpty = document.getElementById('history-empty');
         const taskCustomerSelect = document.getElementById('task-customer-select');
         const taskEmailInput = document.getElementById('task-email');
         const taskSequenceInput = document.getElementById('task-sequence');
@@ -3037,6 +3062,9 @@
                 }
                 if (evt.key === 'Escape' && !attachmentModal.classList.contains('hidden')) {
                     closeAttachmentModal();
+                }
+                if (evt.key === 'Escape' && historyModal && !historyModal.classList.contains('hidden')) {
+                    closeHistoryModal();
                 }
                 // Intentionally do NOT close the preview modal on Escape so it can only be closed via the (X) button
             });
@@ -5117,6 +5145,148 @@
             attachmentList.innerHTML = '';
         }
 
+        function openCustomerHistory(companyName, customerName) {
+            if (!companyName || !companyName.trim() || !customerName || !customerName.trim()) {
+                alert('Company name and customer name are required to view history.');
+                return;
+            }
+
+            // Show modal and loading state
+            historyModal.classList.remove('hidden');
+            historyLoading.classList.remove('hidden');
+            historyEmpty.classList.add('hidden');
+            historyEmailList.innerHTML = '';
+            historyModalTitle.textContent = `Task History${customerName ? ': ' + customerName : ''}`;
+            historyModalMeta.textContent = `Company: ${companyName}`;
+
+            // Fetch task history for this customer
+            fetch(`/api/tasks/by-customer?company_name=${encodeURIComponent(companyName.trim())}&customer=${encodeURIComponent(customerName.trim())}`)
+                .then(response => response.json())
+                .then(data => {
+                    historyLoading.classList.add('hidden');
+                    
+                    if (data.error) {
+                        historyEmailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
+                        return;
+                    }
+
+                    const tasks = data.tasks || [];
+                    
+                    if (tasks.length === 0) {
+                        historyEmpty.classList.remove('hidden');
+                        return;
+                    }
+
+                    // Render task list
+                    historyEmailList.innerHTML = tasks.map((task, index) => {
+                        const createdAtDisplay = task.created_at ? new Date(task.created_at).toLocaleString() : 'Unknown date';
+                        const updatedAtDisplay = task.updated_at ? new Date(task.updated_at).toLocaleString() : 'Unknown date';
+                        const attachmentsHtml = task.attachments && task.attachments.length > 0
+                            ? `<div class="email-attachments">${task.attachments.map(att => 
+                                `<span class="attachment-chip">📎 ${escapeHtml(att.filename || 'attachment')}</span>`
+                            ).join('')}</div>`
+                            : '';
+                        
+                        return `
+                            <div class="email-item">
+                                <div class="email-content">
+                                    <div class="email-header">
+                                        <div class="email-subject">${escapeHtml(task.sequence || 'No Sequence')} - ${escapeHtml(task.catalogue || 'No Type')}</div>
+                                        <div class="email-date">Updated: ${escapeHtml(updatedAtDisplay)}</div>
+                                    </div>
+                                    <div class="email-from">Created: ${escapeHtml(createdAtDisplay)}</div>
+                                    <div class="email-from">Deadline: ${escapeHtml(task.deadline || 'N/A')}</div>
+                                    <div class="email-preview" style="margin-top: 10px; white-space: pre-wrap;">${escapeHtml(task.template || '')}</div>
+                                    ${attachmentsHtml}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    // Store tasks for reference
+                    window.historyTasks = tasks;
+                })
+                .catch(error => {
+                    historyLoading.classList.add('hidden');
+                    historyEmailList.innerHTML = `<div class="message error">Error loading task history: ${escapeHtml(error.message)}</div>`;
+                });
+        }
+
+        function closeHistoryModal() {
+            historyModal.classList.add('hidden');
+            historyEmailList.innerHTML = '';
+            historyLoading.classList.remove('hidden');
+            historyEmpty.classList.add('hidden');
+            window.historyEmails = null;
+            window.historyTasks = null;
+        }
+
+        function openHistoryEmailModal(index) {
+            if (!window.historyEmails || !window.historyEmails[index]) {
+                return;
+            }
+            const email = window.historyEmails[index];
+
+            emailModalSubject.textContent = email.subject || 'No Subject';
+            const metaLines = [
+                `From: ${email.from || 'Unknown sender'}`,
+                `To: ${email.to || 'Unknown recipient'}`,
+                `Date: ${email.date || 'Unknown date'}`
+            ];
+            emailModalMeta.textContent = metaLines.join('\n');
+
+            if (email.html_body) {
+                emailModalFrame.srcdoc = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <style>
+                            body {
+                                margin: 0;
+                                padding: 20px;
+                                font-family: Arial, sans-serif;
+                                overflow-y: auto;
+                                overflow-x: hidden;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        ${email.html_body}
+                    </body>
+                    </html>
+                `;
+            } else {
+                const plain = email.plain_body || '';
+                emailModalFrame.srcdoc = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <style>
+                            body {
+                                margin: 0;
+                                padding: 20px;
+                                font-family: Arial, sans-serif;
+                                overflow-y: auto;
+                                overflow-x: hidden;
+                            }
+                            pre {
+                                white-space: pre-wrap;
+                                word-wrap: break-word;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <pre>${escapeHtml(plain)}</pre>
+                    </body>
+                    </html>
+                `;
+            }
+
+            emailModal.classList.remove('hidden');
+        }
+
         function openTaskModal(index) {
             if (Number.isNaN(index)) {
                 return;
@@ -5624,6 +5794,7 @@
                             <div class="task-actions">
                                 <button class="form-button" onclick="openTaskEditModal(${task.id})" style="font-size: 12px; padding: 5px 10px;">Edit</button>
                                 <button class="form-button" onclick="deleteTask(${task.id})" style="font-size: 12px; padding: 5px 10px; background-color: #dc3545; color: #ffffff;">Delete</button>
+                                <button class="form-button" onclick="openCustomerHistory('${escapeHtml(companyName)}', '${escapeHtml(task.customer || '')}')" style="font-size: 12px; padding: 5px 10px; background-color: #007bff; color: #ffffff; margin-top: 5px;">History</button>
                             </div>
                         </td>
                     </tr>

@@ -20,7 +20,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 app = Flask(__name__)
-app.config['VERSION'] = '1.0.66'
+app.config['VERSION'] = '1.0.69'
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Default email configurations (can be overridden via settings)
@@ -1825,6 +1825,54 @@ def handle_emails():
         return jsonify({'status': 'saved', 'count': len(emails)})
 
 
+@app.route('/api/emails/by-customer', methods=['GET'])
+def get_emails_by_customer():
+    """Get all emails for a customer by email address"""
+    customer_email = (request.args.get('email') or '').strip()
+    if not customer_email:
+        return jsonify({'error': 'Email query parameter is required'}), 400
+    
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    
+    # Search for emails where the customer email appears in from_addr or to_addr
+    query = """
+        SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at
+        FROM emails
+        WHERE from_addr LIKE ? OR to_addr LIKE ?
+        ORDER BY datetime(date) DESC, datetime(fetched_at) DESC
+    """
+    # Use LIKE with % wildcards to match email addresses
+    email_pattern = f'%{customer_email}%'
+    cursor.execute(query, (email_pattern, email_pattern))
+    rows = cursor.fetchall()
+    cursor.close()
+    connection.close()
+    
+    emails = []
+    for row in rows:
+        attachments = []
+        try:
+            attachments = json.loads(row[10] or '[]')
+        except (TypeError, ValueError):
+            attachments = []
+        emails.append({
+            'id': row[1],
+            'subject': row[2],
+            'from': row[3],
+            'to': row[4],
+            'date': row[5],
+            'preview': row[6],
+            'plain_body': row[7],
+            'html_body': row[8],
+            'sequence': row[9],
+            'attachments': attachments,
+            'fetched_at': row[11]
+        })
+    
+    return jsonify({'customer_email': customer_email, 'emails': emails})
+
+
 @app.route('/api/version', methods=['GET'])
 def get_version():
     """Get application version"""
@@ -1941,7 +1989,29 @@ def handle_tasks():
                     'business_type': row['customer_business_type']
                 })
             
-            return jsonify({'tasks': tasks})
+            # Filter to only show latest task per company_name + customer combination
+            # Group tasks by company_name and customer, keep only the one with latest updated_at
+            task_groups = {}
+            for task in tasks:
+                company = task.get('company_name') or ''
+                customer = task.get('customer') or ''
+                key = f"{company}|||{customer}"
+                
+                if key not in task_groups:
+                    task_groups[key] = task
+                else:
+                    # Compare updated_at timestamps
+                    current_updated = task.get('updated_at') or task.get('created_at') or ''
+                    existing_updated = task_groups[key].get('updated_at') or task_groups[key].get('created_at') or ''
+                    
+                    if current_updated > existing_updated:
+                        task_groups[key] = task
+            
+            # Convert back to list and sort by created_at DESC
+            filtered_tasks = list(task_groups.values())
+            filtered_tasks.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+            
+            return jsonify({'tasks': filtered_tasks})
         except Exception as exc:
             return jsonify({'error': f'Database error: {str(exc)}'}), 500
     
@@ -2071,6 +2141,124 @@ def handle_single_task(task_id):
             return jsonify({'error': 'Task not found'}), 404
         
         return jsonify({'status': 'updated', 'id': task_id})
+    except Exception as exc:
+        return jsonify({'error': f'Database error: {str(exc)}'}), 500
+
+
+@app.route('/api/tasks/by-customer', methods=['GET'])
+def get_tasks_by_customer():
+    """Get all task history for a specific company_name and customer combination"""
+    company_name = (request.args.get('company_name') or '').strip()
+    customer = (request.args.get('customer') or '').strip()
+    
+    if not company_name or not customer:
+        return jsonify({'error': 'Both company_name and customer query parameters are required'}), 400
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Try the query with email column first
+        try:
+            cursor.execute("""
+                SELECT 
+                    t.id,
+                    t.sequence,
+                    t.customer,
+                    t.email,
+                    t.catalogue,
+                    t.template,
+                    t.attachments,
+                    t.deadline,
+                    t.created_at,
+                    t.updated_at,
+                    (SELECT company_name FROM customers c 
+                     WHERE (t.email IS NOT NULL AND c.email_suffix = t.email) 
+                        OR (t.customer IS NOT NULL AND c.name = t.customer)
+                     ORDER BY CASE WHEN t.email IS NOT NULL AND c.email_suffix = t.email THEN 1 ELSE 2 END, c.id
+                     LIMIT 1) AS company_name,
+                    (SELECT source FROM customers c 
+                     WHERE (t.email IS NOT NULL AND c.email_suffix = t.email) 
+                        OR (t.customer IS NOT NULL AND c.name = t.customer)
+                     ORDER BY CASE WHEN t.email IS NOT NULL AND c.email_suffix = t.email THEN 1 ELSE 2 END, c.id
+                     LIMIT 1) AS customer_source,
+                    (SELECT business_type FROM customers c 
+                     WHERE (t.email IS NOT NULL AND c.email_suffix = t.email) 
+                        OR (t.customer IS NOT NULL AND c.name = t.customer)
+                     ORDER BY CASE WHEN t.email IS NOT NULL AND c.email_suffix = t.email THEN 1 ELSE 2 END, c.id
+                     LIMIT 1) AS customer_business_type
+                FROM tasks t
+                WHERE t.customer = ?
+                ORDER BY datetime(t.updated_at) DESC, datetime(t.created_at) DESC
+            """, (customer,))
+        except sqlite3.OperationalError as e:
+            # If email column still doesn't exist, use fallback query
+            if 'no such column' in str(e).lower() and 'email' in str(e).lower():
+                cursor.execute("""
+                    SELECT 
+                        t.id,
+                        t.sequence,
+                        t.customer,
+                        NULL as email,
+                        t.catalogue,
+                        t.template,
+                        t.attachments,
+                        t.deadline,
+                        t.created_at,
+                        t.updated_at,
+                        (SELECT company_name FROM customers c 
+                         WHERE c.name = t.customer
+                         ORDER BY c.id
+                         LIMIT 1) AS company_name,
+                        (SELECT source FROM customers c 
+                         WHERE c.name = t.customer
+                         ORDER BY c.id
+                         LIMIT 1) AS customer_source,
+                        (SELECT business_type FROM customers c 
+                         WHERE c.name = t.customer
+                         ORDER BY c.id
+                         LIMIT 1) AS customer_business_type
+                    FROM tasks t
+                    WHERE t.customer = ?
+                    ORDER BY datetime(t.updated_at) DESC, datetime(t.created_at) DESC
+                """, (customer,))
+            else:
+                raise
+        
+        rows = cursor.fetchall()
+        cursor.close()
+        connection.close()
+        
+        tasks = []
+        for row in rows:
+            # Filter by company_name match
+            row_company_name = row['company_name'] or ''
+            if row_company_name != company_name:
+                continue
+                
+            attachments = []
+            try:
+                attachments = json.loads(row[6] or '[]')
+            except (TypeError, ValueError):
+                attachments = []
+            
+            tasks.append({
+                'id': row['id'],
+                'sequence': row['sequence'],
+                'customer': row['customer'],
+                'email': row['email'],
+                'catalogue': row['catalogue'],
+                'template': row['template'],
+                'attachments': attachments,
+                'deadline': row['deadline'],
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at'],
+                'company_name': row['company_name'],
+                'source': row['customer_source'],
+                'business_type': row['customer_business_type']
+            })
+        
+        return jsonify({'company_name': company_name, 'customer': customer, 'tasks': tasks})
     except Exception as exc:
         return jsonify({'error': f'Database error: {str(exc)}'}), 500
 

@@ -3,7 +3,7 @@
 A web application for receiving emails from Gmail and QQ email accounts.
 
 ## Version
-v1.0.63
+v1.0.69
 
 ## Gmail API Setup (Required for Attachments)
 

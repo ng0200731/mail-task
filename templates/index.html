@@ -2016,6 +2016,11 @@
                 </div>
                 <div class="form-group">
                     <label>Attachments</label>
+                    <div id="follow-up-attachment-dropzone" tabindex="0" style="border: 2px dashed #000000; padding: 20px; text-align: center; background-color: #f9f9f9; min-height: 100px; margin-bottom: 15px;">
+                        <p style="margin: 0; color: #666;">Drag and drop files here, click the Browse button, or paste images (Ctrl+V)</p>
+                        <button type="button" id="follow-up-attachment-browse-btn" class="form-button" style="margin-top: 12px; padding: 8px 20px;">Browse</button>
+                        <input type="file" id="follow-up-attachment-file-input" multiple style="display: none;" onchange="handleFollowUpAttachmentFileSelect(event)">
+                    </div>
                     <div id="task-attachments" class="attachment-list"></div>
                 </div>
                 <div class="form-group" style="margin-top: 20px;">
@@ -5706,11 +5711,22 @@
 
             // Clear attachments
             if (taskAttachmentsDiv) {
-                taskAttachmentsDiv.innerHTML = '<div style="padding: 10px; color: #666; font-style: italic;">No attachments</div>';
+                taskAttachmentsDiv.innerHTML = '';
             }
             window.taskModalAttachments = [];
             window.taskModalEmailIndex = null;
             window.currentTaskEmail = null;
+            
+            // Clear file input
+            const followUpFileInput = document.getElementById('follow-up-attachment-file-input');
+            if (followUpFileInput) {
+                followUpFileInput.value = '';
+            }
+            
+            // Setup attachment drag and drop
+            setTimeout(() => {
+                setupFollowUpAttachmentDragAndDrop();
+            }, 100);
 
             // Hide email details section
             const emailDetailsDiv = document.getElementById('task-email-details');
@@ -5739,6 +5755,12 @@
             window.taskModalAttachments = [];
             window.taskModalEmailIndex = null;
             window.currentTaskEmail = null;
+            
+            // Clear file input
+            const followUpFileInput = document.getElementById('follow-up-attachment-file-input');
+            if (followUpFileInput) {
+                followUpFileInput.value = '';
+            }
         }
 
         function removeTaskAttachment(index) {
@@ -5782,6 +5804,152 @@
                     taskAttachmentsDiv.innerHTML = '<div style="padding: 10px; color: #666; font-style: italic;">No attachments</div>';
                 }
             }
+        }
+
+        // Attachment handling functions for Follow-up Task Modal (mirror task form attachments)
+        function setupFollowUpAttachmentDragAndDrop() {
+            const dropzone = document.getElementById('follow-up-attachment-dropzone');
+            const fileInput = document.getElementById('follow-up-attachment-file-input');
+            const browseButton = document.getElementById('follow-up-attachment-browse-btn');
+            
+            if (!dropzone || !fileInput || !browseButton) return;
+            
+            // Dedicated browse button to open file picker
+            browseButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                fileInput.click();
+            });
+            
+            // Drag and drop handlers
+            dropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropzone.style.backgroundColor = '#e9e9e9';
+            });
+            
+            dropzone.addEventListener('dragleave', () => {
+                dropzone.style.backgroundColor = '#f9f9f9';
+            });
+            
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.style.backgroundColor = '#f9f9f9';
+                const files = Array.from(e.dataTransfer.files);
+                handleFollowUpAttachmentFiles(files);
+            });
+
+            // Paste image from clipboard
+            dropzone.addEventListener('paste', (e) => {
+                const clipboardData = e.clipboardData || window.clipboardData;
+                if (!clipboardData || !clipboardData.items) {
+                    return;
+                }
+                const files = [];
+                for (let i = 0; i < clipboardData.items.length; i++) {
+                    const item = clipboardData.items[i];
+                    if (item.kind === 'file') {
+                        const file = item.getAsFile();
+                        if (file && file.type && file.type.startsWith('image/')) {
+                            files.push(file);
+                        }
+                    }
+                }
+                if (files.length > 0) {
+                    e.preventDefault();
+                    handleFollowUpAttachmentFiles(files);
+                }
+            });
+        }
+
+        function handleFollowUpAttachmentFileSelect(event) {
+            const files = Array.from(event.target.files || []);
+            handleFollowUpAttachmentFiles(files);
+        }
+
+        function handleFollowUpAttachmentFiles(files) {
+            if (!Array.isArray(files) || files.length === 0) return;
+            
+            if (!window.taskModalAttachments) {
+                window.taskModalAttachments = [];
+            }
+            
+            files.forEach(file => {
+                // Avoid adding exact duplicate files (same name and size)
+                const isDuplicate = window.taskModalAttachments.some(att => 
+                    att.filename === file.name && att.size === file.size
+                );
+                if (isDuplicate) {
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64Data = e.target.result.split(',')[1];
+                    window.taskModalAttachments.push({
+                        filename: file.name,
+                        content_type: file.type || 'application/octet-stream',
+                        size: file.size,
+                        data: base64Data,
+                        caption: ''
+                    });
+                    renderFollowUpAttachmentsList();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderFollowUpAttachmentsList() {
+            const container = document.getElementById('task-attachments');
+            if (!container) return;
+            
+            if (!window.taskModalAttachments || window.taskModalAttachments.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            container.innerHTML = window.taskModalAttachments.map((att, idx) => {
+                const filename = escapeHtml(att.filename || 'attachment');
+                const size = formatAttachmentSize(att.size || 0);
+                const contentType = att.content_type || 'application/octet-stream';
+                const isImage = (contentType || '').toLowerCase().startsWith('image/');
+                const isPDF = contentType === 'application/pdf' || (att.filename && att.filename.toLowerCase().endsWith('.pdf'));
+                const thumbHtml = isImage
+                    ? `<img src="data:${contentType};base64,${att.data}" alt="${filename}" class="task-attachment-thumb" data-index="${idx}" onclick="openFollowUpAttachmentPreview(${idx})" style="max-width: 100px; max-height: 100px; cursor: pointer; margin-right: 10px;">`
+                    : '';
+                const dataUrl = `data:${contentType};base64,${att.data}`;
+                
+                return `
+                    <div class="task-attachment-display" style="margin-bottom: 10px; display: flex; align-items: flex-start;">
+                        ${thumbHtml}
+                        <div class="task-attachment-info" style="flex: 1;">
+                            <div style="font-weight: bold;">${filename}</div>
+                            <div style="font-size: 12px; color: #666;">${contentType} • ${size}</div>
+                        </div>
+                        <div class="task-attachment-actions">
+                            ${(isImage || isPDF) ? `<button class="form-button" onclick="openFollowUpAttachmentPreview(${idx})" style="font-size: 12px; margin-right: 5px;">View</button>` : ''}
+                            <a class="form-button" href="${dataUrl}" download="${escapeHtml(att.filename || `attachment-${idx + 1}`)}" style="font-size: 12px; margin-right: 5px;">Download</a>
+                            <button type="button" class="form-button" onclick="removeFollowUpAttachment(${idx})" style="font-size: 12px; background-color: #dc3545; color: white;">X</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function removeFollowUpAttachment(index) {
+            if (!window.taskModalAttachments || !window.taskModalAttachments[index]) {
+                return;
+            }
+            window.taskModalAttachments.splice(index, 1);
+            renderFollowUpAttachmentsList();
+        }
+
+        function openFollowUpAttachmentPreview(attachmentIndex) {
+            if (!window.taskModalAttachments || !window.taskModalAttachments[attachmentIndex]) {
+                return;
+            }
+            const att = window.taskModalAttachments[attachmentIndex];
+            const contentType = att.content_type || 'application/octet-stream';
+            const filename = att.filename || `Attachment ${attachmentIndex + 1}`;
+            openPreviewModal(att.data || '', contentType, filename);
         }
 
         function submitTask() {

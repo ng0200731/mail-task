@@ -5619,6 +5619,109 @@
             })(20);
         }
 
+        function openFollowUpTaskModal(taskId) {
+            const tasks = window.taskListCache || [];
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) {
+                alert('Task not found');
+                return;
+            }
+
+            // Populate customer autocomplete
+            const populateCustomerAutocomplete = () => {
+                if (!taskCustomerSelect) return;
+                
+                // Setup autocomplete
+                setupAutocomplete('task-customer-select', 'task-customer-dropdown', 'task-customer-value', 'task-email');
+                
+                // Pre-fill customer name
+                const customerName = task.customer || '';
+                const customerEmail = task.email || '';
+                
+                if (customerName) {
+                    taskCustomerSelect.value = customerName;
+                }
+                
+                // Find customer by name or email to get email_suffix
+                let match = null;
+                if (customerCache && customerCache.length > 0) {
+                    if (customerEmail) {
+                        match = customerCache.find(c => 
+                            (c.email_suffix || '').toLowerCase() === customerEmail.toLowerCase() ||
+                            (c.name || '').toLowerCase() === customerName.toLowerCase()
+                        );
+                    } else if (customerName) {
+                        match = customerCache.find(c => 
+                            (c.name || '').toLowerCase() === customerName.toLowerCase()
+                        );
+                    }
+                }
+                
+                const valueInput = document.getElementById('task-customer-value');
+                if (valueInput) {
+                    valueInput.value = match ? (match.email_suffix || '') : '';
+                }
+                
+                // Pre-fill email
+                if (customerEmail) {
+                    taskEmailInput.value = customerEmail;
+                } else if (match && match.email_suffix && match.email_suffix.includes('@')) {
+                    taskEmailInput.value = match.email_suffix;
+                } else {
+                    taskEmailInput.value = '';
+                }
+            };
+
+            // Load customers if needed
+            if (!customerCache || customerCache.length === 0) {
+                loadCustomers(false).then(() => populateCustomerAutocomplete()).catch(() => {
+                    populateCustomerAutocomplete();
+                });
+            } else {
+                populateCustomerAutocomplete();
+            }
+
+            // Load task types for dropdown
+            loadTaskTypesForDropdown();
+
+            // Clear sequence (new task)
+            taskSequenceInput.value = '';
+            
+            // Clear deadline
+            if (taskDeadlineInput) {
+                taskDeadlineInput.value = '';
+            }
+            
+            // Clear template/notes editor
+            setTimeout(() => {
+                if (taskNotesEditor) {
+                    taskNotesEditor.setContents([]);
+                }
+            }, 100);
+            
+            // Clear catalogue/type dropdown
+            if (taskCatalogueInput) {
+                taskCatalogueInput.value = '';
+            }
+
+            // Clear attachments
+            if (taskAttachmentsDiv) {
+                taskAttachmentsDiv.innerHTML = '<div style="padding: 10px; color: #666; font-style: italic;">No attachments</div>';
+            }
+            window.taskModalAttachments = [];
+            window.taskModalEmailIndex = null;
+            window.currentTaskEmail = null;
+
+            // Hide email details section
+            const emailDetailsDiv = document.getElementById('task-email-details');
+            if (emailDetailsDiv) {
+                emailDetailsDiv.style.display = 'none';
+            }
+
+            // Open modal
+            taskModal.classList.remove('hidden');
+        }
+
         function closeTaskModal() {
             taskModal.classList.add('hidden');
             // Clear attachments display
@@ -5838,6 +5941,7 @@
                             <div class="task-actions">
                                 <button class="form-button" onclick="openTaskEditModal(${task.id})" style="font-size: 12px; padding: 5px 10px;">Edit</button>
                                 <button class="form-button" onclick="deleteTask(${task.id})" style="font-size: 12px; padding: 5px 10px; background-color: #dc3545; color: #ffffff;">Delete</button>
+                                <button class="form-button" onclick="openFollowUpTaskModal(${task.id})" style="font-size: 12px; padding: 5px 10px; background-color: #28a745; color: #ffffff; margin-top: 5px;">Follow up</button>
                                 <button class="form-button" onclick="openCustomerHistory('${escapeHtml(companyName)}', '${escapeHtml(task.customer || '')}')" style="font-size: 12px; padding: 5px 10px; background-color: #007bff; color: #ffffff; margin-top: 5px;">History</button>
                             </div>
                         </td>

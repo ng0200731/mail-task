@@ -1178,6 +1178,26 @@
             background-color: #e0e0e0;
         }
 
+        /* Dropdown arrow indicator */
+        .dropdown-arrow {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: #000000;
+            font-size: 12px;
+            z-index: 1;
+        }
+
+        .dropdown-input-wrapper {
+            position: relative;
+        }
+
+        .dropdown-input-wrapper input {
+            padding-right: 30px;
+        }
+
         .attachment-drop-area {
             border: 2px dashed #000000;
             border-radius: 4px;
@@ -1309,8 +1329,9 @@
                         <!-- Row 1: Country | Company Name | Company Address -->
                         <div class="form-group">
                             <label for="customer-country">Country</label>
-                            <div style="position: relative;">
+                            <div class="dropdown-input-wrapper" style="position: relative;">
                                 <input type="text" id="customer-country" placeholder="Search or select country" autocomplete="off" oninput="filterCountries()" onfocus="showCountryDropdown()" onblur="setTimeout(() => hideCountryDropdown(), 200)">
+                                <span class="dropdown-arrow">▼</span>
                                 <div id="country-dropdown" class="country-dropdown hidden"></div>
                             </div>
                         </div>
@@ -1345,15 +1366,17 @@
                         </div>
                         <div class="form-group">
                             <label for="customer-source">Source</label>
-                            <div style="position: relative;">
+                            <div class="dropdown-input-wrapper" style="position: relative;">
                                 <input type="text" id="customer-source" placeholder="Search or select source" autocomplete="off" oninput="filterCustomerSources()" onfocus="showCustomerSourceDropdown()" onblur="setTimeout(() => hideCustomerSourceDropdown(), 200)">
+                                <span class="dropdown-arrow">▼</span>
                                 <div id="customer-source-dropdown" class="country-dropdown hidden"></div>
                             </div>
                         </div>
                         <div class="form-group">
                             <label for="customer-business-type">Business Type</label>
-                            <div style="position: relative;">
+                            <div class="dropdown-input-wrapper" style="position: relative;">
                                 <input type="text" id="customer-business-type" placeholder="Search or select business type" autocomplete="off" oninput="filterCustomerBusinessTypes()" onfocus="showCustomerBusinessTypeDropdown()" onblur="setTimeout(() => hideCustomerBusinessTypeDropdown(), 200)">
+                                <span class="dropdown-arrow">▼</span>
                                 <div id="customer-business-type-dropdown" class="country-dropdown hidden"></div>
                             </div>
                         </div>

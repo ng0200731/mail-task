@@ -69,16 +69,26 @@
             font-size: 16px;
             font-family: Arial, sans-serif;
             transition: background-color 0.2s;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
         }
 
         input[type="email"]:focus,
         input[type="text"]:focus {
             outline: none;
             background-color: #f0f0f0;
+            border: 2px solid #000000;
         }
 
         input[type="email"]:disabled,
         input[type="text"]:disabled {
+            background-color: #f0f0f0;
+            cursor: not-allowed;
+        }
+        
+        input[type="email"]:read-only,
+        input[type="text"]:read-only {
             background-color: #f0f0f0;
         }
 
@@ -217,17 +227,21 @@
 
         <div id="message" class="message"></div>
 
-        <form id="loginForm">
+        <form id="loginForm" novalidate>
             <div class="form-group">
                 <label for="email">Email Address</label>
                 <div class="input-group">
                     <input 
-                        type="email" 
+                        type="text" 
                         id="email" 
                         name="email" 
                         placeholder="your.email@example.com" 
-                        required
                         autocomplete="email"
+                        spellcheck="false"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        value=""
+                        tabindex="1"
                     >
                     <button type="button" id="sendBtn" class="btn btn-primary">Send</button>
                 </div>
@@ -256,36 +270,66 @@
     </div>
 
     <script>
-        const emailInput = document.getElementById('email');
-        const codeInput = document.getElementById('code');
-        const sendBtn = document.getElementById('sendBtn');
-        const submitBtn = document.getElementById('submitBtn');
-        const codeGroup = document.getElementById('codeGroup');
-        const messageDiv = document.getElementById('message');
-        const resendLink = document.getElementById('resendLink');
-        const loginForm = document.getElementById('loginForm');
-
+        // Initialize elements after DOM is ready
+        let emailInput, codeInput, sendBtn, submitBtn, codeGroup, messageDiv, resendLink, loginForm;
         let currentEmail = '';
-
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            emailInput = document.getElementById('email');
+            codeInput = document.getElementById('code');
+            sendBtn = document.getElementById('sendBtn');
+            submitBtn = document.getElementById('submitBtn');
+            codeGroup = document.getElementById('codeGroup');
+            messageDiv = document.getElementById('message');
+            resendLink = document.getElementById('resendLink');
+            loginForm = document.getElementById('loginForm');
+            
+            // Ensure email input is enabled and focusable
+            if (emailInput) {
+                emailInput.disabled = false;
+                emailInput.readOnly = false;
+                emailInput.removeAttribute('readonly');
+                emailInput.removeAttribute('disabled');
+                emailInput.setAttribute('tabindex', '1');
+                emailInput.value = '';
+                // Focus on email input
+                setTimeout(() => {
+                    emailInput.focus();
+                }, 100);
+            }
+            
+            // Initialize event listeners
+            initializeEventListeners();
+        });
+        
         function showMessage(text, type) {
-            messageDiv.textContent = text;
-            messageDiv.className = `message show ${type}`;
-            setTimeout(() => {
-                messageDiv.classList.remove('show');
-            }, 5000);
+            if (messageDiv) {
+                messageDiv.textContent = text;
+                messageDiv.className = `message show ${type}`;
+                setTimeout(() => {
+                    messageDiv.classList.remove('show');
+                }, 5000);
+            }
         }
 
         function sendCode() {
+            if (!emailInput) return;
+            
             const email = emailInput.value.trim();
             
-            if (!email || !email.includes('@')) {
+            // Validate email format
+            const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!email || !emailPattern.test(email)) {
                 showMessage('Please enter a valid email address', 'error');
+                emailInput.focus();
                 return;
             }
 
             currentEmail = email;
-            sendBtn.disabled = true;
-            sendBtn.textContent = 'Sending...';
+            if (sendBtn) {
+                sendBtn.disabled = true;
+                sendBtn.textContent = 'Sending...';
+            }
 
             fetch('/api/send-verification-code', {
                 method: 'POST',
@@ -298,93 +342,117 @@
             .then(data => {
                 if (data.success) {
                     showMessage('Verification code sent to your email!', 'success');
-                    codeGroup.style.display = 'block';
-                    submitBtn.style.display = 'block';
-                    codeInput.focus();
-                    emailInput.disabled = true;
+                    if (codeGroup) codeGroup.style.display = 'block';
+                    if (submitBtn) submitBtn.style.display = 'block';
+                    if (codeInput) codeInput.focus();
+                    if (emailInput) emailInput.disabled = true;
                 } else {
                     showMessage(data.error || 'Failed to send verification code', 'error');
-                    sendBtn.disabled = false;
-                    sendBtn.textContent = 'Send';
+                    if (sendBtn) {
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = 'Send';
+                    }
                 }
             })
             .catch(error => {
                 showMessage('Error sending verification code. Please try again.', 'error');
-                sendBtn.disabled = false;
-                sendBtn.textContent = 'Send';
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = 'Send';
+                }
             });
         }
-
-        sendBtn.addEventListener('click', sendCode);
-
-        resendLink.addEventListener('click', () => {
-            if (currentEmail) {
-                sendCode();
-            }
-        });
-
-        // Allow Enter key to send code
-        emailInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !codeGroup.style.display || codeGroup.style.display === 'none') {
-                e.preventDefault();
-                sendCode();
-            }
-        });
-
-        // Only allow numbers in code input
-        codeInput.addEventListener('input', (e) => {
-            e.target.value = e.target.value.replace(/[^0-9]/g, '');
-        });
-
-        // Auto-submit when 6 digits are entered
-        codeInput.addEventListener('input', (e) => {
-            if (e.target.value.length === 6) {
-                loginForm.dispatchEvent(new Event('submit'));
-            }
-        });
-
-        loginForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            
-            const email = emailInput.value.trim();
-            const code = codeInput.value.trim();
-
-            if (!code || code.length !== 6) {
-                showMessage('Please enter the 6-digit verification code', 'error');
-                return;
+        
+        function initializeEventListeners() {
+            if (sendBtn) {
+                sendBtn.addEventListener('click', sendCode);
             }
 
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Verifying...';
+            if (resendLink) {
+                resendLink.addEventListener('click', () => {
+                    if (currentEmail) {
+                        sendCode();
+                    }
+                });
+            }
 
-            fetch('/api/verify-code', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ email: email, code: code })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage('Login successful! Redirecting...', 'success');
-                    setTimeout(() => {
-                        window.location.href = '/';
-                    }, 1000);
-                } else {
-                    showMessage(data.error || 'Invalid verification code', 'error');
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Verify & Login';
-                    codeInput.value = '';
-                    codeInput.focus();
-                }
-            })
-            .catch(error => {
-                showMessage('Error verifying code. Please try again.', 'error');
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Verify & Login';
-            });
-        });
+            // Allow Enter key to send code
+            if (emailInput) {
+                emailInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && (!codeGroup || !codeGroup.style.display || codeGroup.style.display === 'none')) {
+                        e.preventDefault();
+                        sendCode();
+                    }
+                });
+            }
+
+            // Only allow numbers in code input
+            if (codeInput) {
+                codeInput.addEventListener('input', (e) => {
+                    e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                });
+
+                // Auto-submit when 6 digits are entered
+                codeInput.addEventListener('input', (e) => {
+                    if (e.target.value.length === 6 && loginForm) {
+                        loginForm.dispatchEvent(new Event('submit'));
+                    }
+                });
+            }
+
+            if (loginForm) {
+                loginForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    
+                    const email = emailInput ? emailInput.value.trim() : '';
+                    const code = codeInput ? codeInput.value.trim() : '';
+
+                    if (!code || code.length !== 6) {
+                        showMessage('Please enter the 6-digit verification code', 'error');
+                        return;
+                    }
+
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.textContent = 'Verifying...';
+                    }
+
+                    fetch('/api/verify-code', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ email: email, code: code })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showMessage('Login successful! Redirecting...', 'success');
+                            setTimeout(() => {
+                                window.location.href = '/';
+                            }, 1000);
+                        } else {
+                            showMessage(data.error || 'Invalid verification code', 'error');
+                            if (submitBtn) {
+                                submitBtn.disabled = false;
+                                submitBtn.textContent = 'Verify & Login';
+                            }
+                            if (codeInput) {
+                                codeInput.value = '';
+                                codeInput.focus();
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        showMessage('Error verifying code. Please try again.', 'error');
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Verify & Login';
+                        }
+                    });
+                });
+            }
+        }
     </script>
 </body>
 </html>

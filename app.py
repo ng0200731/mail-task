@@ -1,4 +1,5 @@
-from flask import Flask, render_template, jsonify, request, redirect, session, url_for
+from flask import Flask, render_template, jsonify, request, redirect, session, url_for, send_file
+from functools import wraps
 import imaplib
 import email
 from email.header import decode_header
@@ -20,6 +21,9 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
+from io import BytesIO
 
 app = Flask(__name__)
 app.config['VERSION'] = '1.0.81'
@@ -99,6 +103,40 @@ def get_db_connection():
     connection = sqlite3.connect(str(CUSTOMER_DB_PATH))
     connection.row_factory = sqlite3.Row
     return connection
+
+
+def get_user_level():
+    """Get current user's level from session"""
+    user_email = session.get('user_email')
+    if not user_email:
+        return None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("SELECT level FROM users WHERE email = ?", (user_email,))
+        user = cursor.fetchone()
+        cursor.close()
+        connection.close()
+        
+        if user and user['level']:
+            return user['level']
+        return '1'  # Default level
+    except Exception as e:
+        print(f"Error getting user level: {str(e)}")
+        return '1'  # Default level
+
+
+def check_user_level(min_level):
+    """Check if user has required level"""
+    if not session.get('logged_in'):
+        return False, jsonify({'error': 'Not authenticated'}), 401
+    
+    user_level = get_user_level()
+    if not user_level or int(user_level) < int(min_level):
+        return False, jsonify({'error': f'Access denied. This feature requires level {min_level} or higher.'}), 403
+    
+    return True, None, None
 
 
 def initialize_database():
@@ -1362,7 +1400,22 @@ def index():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
     user_email = session.get('user_email', '')
-    return render_template('index.html', version=app.config['VERSION'], user_email=user_email)
+    
+    # Get user level from database
+    user_level = '1'  # Default level
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("SELECT level FROM users WHERE email = ?", (user_email,))
+        user = cursor.fetchone()
+        if user and user['level']:
+            user_level = user['level']
+        cursor.close()
+        connection.close()
+    except Exception as e:
+        print(f"Error getting user level: {str(e)}")
+    
+    return render_template('index.html', version=app.config['VERSION'], user_email=user_email, user_level=user_level)
 
 
 @app.route('/api/send-verification-code', methods=['POST'])
@@ -1448,7 +1501,7 @@ def verify_verification_code():
                 # Create new user
                 cursor.execute("""
                     INSERT INTO users (email, level, status, created_at, last_login, login_count)
-                    VALUES (?, 'user', 'active', ?, ?, 1)
+                    VALUES (?, '1', 'active', ?, ?, 1)
                 """, (email, now_iso, now_iso))
             
             connection.commit()
@@ -1472,42 +1525,458 @@ def logout():
 
 @app.route('/api/users', methods=['GET'])
 def get_users():
-    """Get all users with login history"""
+    """Get all users with login history, including users who created records but haven't logged in"""
     if not session.get('logged_in'):
         return jsonify({'error': 'Not authenticated'}), 401
     
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
+        
+        # Get all users from users table (those who have logged in)
         cursor.execute("""
             SELECT id, email, level, status, created_at, last_login, login_count
             FROM users
-            ORDER BY last_login DESC, created_at DESC
         """)
-        rows = cursor.fetchall()
-        cursor.close()
-        connection.close()
+        users_rows = cursor.fetchall()
         
-        users = []
-        for row in rows:
-            users.append({
+        # Get all unique created_by emails from customers, emails, and tasks tables
+        cursor.execute("""
+            SELECT DISTINCT created_by as email
+            FROM customers
+            WHERE created_by IS NOT NULL AND created_by != ''
+            UNION
+            SELECT DISTINCT created_by as email
+            FROM emails
+            WHERE created_by IS NOT NULL AND created_by != ''
+            UNION
+            SELECT DISTINCT created_by as email
+            FROM tasks
+            WHERE created_by IS NOT NULL AND created_by != ''
+        """)
+        created_by_rows = cursor.fetchall()
+        
+        # Create a dictionary of existing users from users table
+        users_dict = {}
+        for row in users_rows:
+            email = row['email']
+            users_dict[email] = {
                 'id': row['id'],
-                'email': row['email'],
-                'level': row['level'] or 'user',
+                'email': email,
+                'level': row['level'] or '1',
                 'status': row['status'] or 'active',
                 'created_at': row['created_at'],
                 'last_login': row['last_login'],
                 'login_count': row['login_count'] or 0
-            })
+            }
+        
+        # Add users who created records but haven't logged in
+        for row in created_by_rows:
+            email = row['email']
+            if email and email not in users_dict:
+                # Find the earliest created_at from any table for this user
+                cursor.execute("""
+                    SELECT MIN(created_at) as earliest_created FROM (
+                        SELECT created_at FROM customers WHERE created_by = ?
+                        UNION ALL
+                        SELECT fetched_at as created_at FROM emails WHERE created_by = ?
+                        UNION ALL
+                        SELECT created_at FROM tasks WHERE created_by = ?
+                    )
+                """, (email, email, email))
+                earliest = cursor.fetchone()
+                earliest_created = earliest['earliest_created'] if earliest and earliest['earliest_created'] else None
+                
+                users_dict[email] = {
+                    'id': None,  # No user record yet
+                    'email': email,
+                    'level': '1',  # Default level
+                    'status': 'active',  # Default status
+                    'created_at': earliest_created,
+                    'last_login': None,  # Never logged in
+                    'login_count': 0
+                }
+        
+        # Convert to list and sort
+        users = list(users_dict.values())
+        users.sort(key=lambda x: (
+            x['last_login'] if x['last_login'] else '',  # Sort by last_login DESC
+            x['created_at'] if x['created_at'] else ''   # Then by created_at DESC
+        ), reverse=True)
+        
+        cursor.close()
+        connection.close()
         
         return jsonify({'users': users})
     except Exception as exc:
         return jsonify({'error': f'Database error: {str(exc)}'}), 500
 
 
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+def update_user(user_id):
+    """Update user level and status"""
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    data = request.json or {}
+    level = (data.get('level') or '').strip()
+    status = (data.get('status') or '').strip()
+    
+    if not level or level not in ['1', '2', '3']:
+        return jsonify({'error': 'Invalid level. Must be 1, 2, or 3'}), 400
+    
+    if not status or status not in ['active', 'suspended']:
+        return jsonify({'error': 'Invalid status. Must be active or suspended'}), 400
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("""
+            UPDATE users 
+            SET level = ?, status = ?
+            WHERE id = ?
+        """, (level, status, user_id))
+        connection.commit()
+        updated = cursor.rowcount > 0
+        cursor.close()
+        connection.close()
+        
+        if not updated:
+            return jsonify({'error': 'User not found'}), 404
+        
+        return jsonify({'success': True, 'message': 'User updated successfully'})
+    except Exception as exc:
+        return jsonify({'error': f'Database error: {str(exc)}'}), 500
+
+
+@app.route('/api/users/by-email', methods=['PUT'])
+def update_user_by_email():
+    """Update user level and status by email (for users who haven't logged in yet)"""
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    data = request.json or {}
+    email = (data.get('email') or '').strip()
+    level = (data.get('level') or '').strip()
+    status = (data.get('status') or '').strip()
+    
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+    
+    if not level or level not in ['1', '2', '3']:
+        return jsonify({'error': 'Invalid level. Must be 1, 2, or 3'}), 400
+    
+    if not status or status not in ['active', 'suspended']:
+        return jsonify({'error': 'Invalid status. Must be active or suspended'}), 400
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Check if user exists
+        cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+        user = cursor.fetchone()
+        
+        if user:
+            # Update existing user
+            cursor.execute("""
+                UPDATE users 
+                SET level = ?, status = ?
+                WHERE email = ?
+            """, (level, status, email))
+        else:
+            # Create new user record
+            now_iso = datetime.utcnow().isoformat()
+            # Find earliest created_at from any table
+            cursor.execute("""
+                SELECT MIN(created_at) as earliest_created FROM (
+                    SELECT created_at FROM customers WHERE created_by = ?
+                    UNION ALL
+                    SELECT fetched_at as created_at FROM emails WHERE created_by = ?
+                    UNION ALL
+                    SELECT created_at FROM tasks WHERE created_by = ?
+                )
+            """, (email, email, email))
+            earliest = cursor.fetchone()
+            created_at = earliest['earliest_created'] if earliest and earliest['earliest_created'] else now_iso
+            
+            cursor.execute("""
+                INSERT INTO users (email, level, status, created_at, last_login, login_count)
+                VALUES (?, ?, ?, ?, NULL, 0)
+            """, (email, level, status, created_at))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'message': 'User updated successfully'})
+    except Exception as exc:
+        return jsonify({'error': f'Database error: {str(exc)}'}), 500
+
+
+@app.route('/api/export/customers', methods=['GET'])
+def export_customers():
+    """Export customers to Excel - requires level 2+"""
+    has_access, error_response, status_code = check_user_level(2)
+    if not has_access:
+        return error_response, status_code
+    
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT name, email_suffix, country, website, remark, company_name, tel, source, address, business_type, created_at, created_by
+            FROM customers
+            WHERE created_by = ?
+            ORDER BY datetime(created_at) DESC
+        """, (user_email,))
+        rows = cursor.fetchall()
+        cursor.close()
+        connection.close()
+        
+        # Create workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Customers"
+        
+        # Headers
+        headers = ['Name', 'Email Suffix', 'Country', 'Website', 'Remark', 'Company Name', 'Tel', 'Source', 'Address', 'Business Type', 'Created At', 'Created By']
+        ws.append(headers)
+        
+        # Style headers
+        header_font = Font(bold=True)
+        for cell in ws[1]:
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Add data
+        for row in rows:
+            ws.append([
+                row['name'] or '',
+                row['email_suffix'] or '',
+                row['country'] or '',
+                row['website'] or '',
+                (row['remark'] or '').replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n'),
+                row['company_name'] or '',
+                row['tel'] or '',
+                row['source'] or '',
+                row['address'] or '',
+                row['business_type'] or '',
+                row['created_at'] or '',
+                row['created_by'] or ''
+            ])
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Save to BytesIO
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        filename = f'customers_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+                        as_attachment=True, download_name=filename)
+    
+    except Exception as e:
+        return jsonify({'error': f'Export error: {str(e)}'}), 500
+
+
+@app.route('/api/export/tasks', methods=['GET'])
+def export_tasks():
+    """Export tasks to Excel - requires level 2+"""
+    has_access, error_response, status_code = check_user_level(2)
+    if not has_access:
+        return error_response, status_code
+    
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Check if email column exists
+        cursor.execute("PRAGMA table_info(tasks)")
+        columns = [col[1] for col in cursor.fetchall()]
+        has_email_column = 'email' in columns
+        
+        # Try to add email column if it doesn't exist
+        if not has_email_column:
+            try:
+                cursor.execute("ALTER TABLE tasks ADD COLUMN email TEXT")
+                connection.commit()
+                has_email_column = True
+            except sqlite3.OperationalError:
+                connection.rollback()
+                pass
+        
+        # Get tasks with related customer info - use query that handles missing email column
+        if has_email_column:
+            cursor.execute("""
+                SELECT 
+                    t.sequence,
+                    t.customer,
+                    COALESCE(t.email, 
+                        (SELECT c.email_suffix FROM customers c 
+                         WHERE t.customer IS NOT NULL AND c.name = t.customer
+                         ORDER BY c.id
+                         LIMIT 1)
+                    ) AS email,
+                    t.catalogue,
+                    t.template,
+                    t.attachments,
+                    t.deadline,
+                    t.created_at,
+                    t.updated_at,
+                    t.created_by,
+                    (SELECT company_name FROM customers c 
+                     WHERE (t.email IS NOT NULL AND c.email_suffix = t.email) 
+                        OR (t.customer IS NOT NULL AND c.name = t.customer)
+                     ORDER BY CASE WHEN t.email IS NOT NULL AND c.email_suffix = t.email THEN 1 ELSE 2 END, c.id
+                     LIMIT 1) AS company_name,
+                    (SELECT source FROM customers c 
+                     WHERE (t.email IS NOT NULL AND c.email_suffix = t.email) 
+                        OR (t.customer IS NOT NULL AND c.name = t.customer)
+                     ORDER BY CASE WHEN t.email IS NOT NULL AND c.email_suffix = t.email THEN 1 ELSE 2 END, c.id
+                     LIMIT 1) AS source,
+                    (SELECT business_type FROM customers c 
+                     WHERE (t.email IS NOT NULL AND c.email_suffix = t.email) 
+                        OR (t.customer IS NOT NULL AND c.name = t.customer)
+                     ORDER BY CASE WHEN t.email IS NOT NULL AND c.email_suffix = t.email THEN 1 ELSE 2 END, c.id
+                     LIMIT 1) AS business_type
+                FROM tasks t
+                WHERE t.created_by = ?
+                ORDER BY datetime(t.created_at) DESC
+            """, (user_email,))
+        else:
+            # Fallback query without email column references in subqueries
+            cursor.execute("""
+                SELECT 
+                    t.sequence,
+                    t.customer,
+                    (SELECT c.email_suffix FROM customers c 
+                     WHERE t.customer IS NOT NULL AND c.name = t.customer
+                     ORDER BY c.id
+                     LIMIT 1) AS email,
+                    t.catalogue,
+                    t.template,
+                    t.attachments,
+                    t.deadline,
+                    t.created_at,
+                    t.updated_at,
+                    t.created_by,
+                    (SELECT company_name FROM customers c 
+                     WHERE t.customer IS NOT NULL AND c.name = t.customer
+                     ORDER BY c.id
+                     LIMIT 1) AS company_name,
+                    (SELECT source FROM customers c 
+                     WHERE t.customer IS NOT NULL AND c.name = t.customer
+                     ORDER BY c.id
+                     LIMIT 1) AS source,
+                    (SELECT business_type FROM customers c 
+                     WHERE t.customer IS NOT NULL AND c.name = t.customer
+                     ORDER BY c.id
+                     LIMIT 1) AS business_type
+                FROM tasks t
+                WHERE t.created_by = ?
+                ORDER BY datetime(t.created_at) DESC
+            """, (user_email,))
+        rows = cursor.fetchall()
+        cursor.close()
+        connection.close()
+        
+        # Create workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Tasks"
+        
+        # Headers
+        headers = ['Sequence', 'Business Type', 'Customer', 'Company Name', 'Email', 'Type', 'Template', 'Deadline', 'Created At', 'Created By', 'Source', 'Last Updated', 'Attachments']
+        ws.append(headers)
+        
+        # Style headers
+        header_font = Font(bold=True)
+        for cell in ws[1]:
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Add data
+        for row in rows:
+            # Parse attachments to get filenames
+            attachments_text = ''
+            try:
+                if row['attachments']:
+                    attachments = json.loads(row['attachments'])
+                    if isinstance(attachments, list):
+                        attachments_text = ', '.join([att.get('filename', 'attachment') for att in attachments if isinstance(att, dict)])
+            except:
+                pass
+            
+            ws.append([
+                row['sequence'] or '',
+                row['business_type'] or '',
+                row['customer'] or '',
+                row['company_name'] or '',
+                row['email'] or '',
+                row['catalogue'] or '',
+                row['template'] or '',
+                row['deadline'] or '',
+                row['created_at'] or '',
+                row['created_by'] or '',
+                row['source'] or '',
+                row['updated_at'] or '',
+                attachments_text
+            ])
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Save to BytesIO
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        filename = f'tasks_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+                        as_attachment=True, download_name=filename)
+    
+    except Exception as e:
+        return jsonify({'error': f'Export error: {str(e)}'}), 500
+
+
 @app.route('/api/gmail-auth', methods=['GET'])
 def gmail_auth():
-    """Start Gmail OAuth flow"""
+    """Start Gmail OAuth flow - requires level 2+"""
+    has_access, error_response, status_code = check_user_level(2)
+    if not has_access:
+        return error_response, status_code
+    
     data = request.args
     client_id = (data.get('client_id') or GMAIL_OAUTH_CONFIG.get('client_id') or '').strip()
     client_secret = (data.get('client_secret') or GMAIL_OAUTH_CONFIG.get('client_secret') or '').strip()
@@ -1712,7 +2181,11 @@ def gmail_status():
 
 @app.route('/api/fetch-gmail', methods=['POST'])
 def fetch_gmail():
-    """Fetch emails from Gmail using Gmail API"""
+    """Fetch emails from Gmail using Gmail API - requires level 2+"""
+    has_access, error_response, status_code = check_user_level(2)
+    if not has_access:
+        return error_response, status_code
+    
     data = request.json or {}
     limit = data.get('limit', 50)
     days_back = data.get('days_back', 1)
@@ -1754,6 +2227,10 @@ def fetch_gmail():
 
 @app.route('/api/fetch-qq', methods=['POST'])
 def fetch_qq():
+    """Fetch emails from QQ - requires level 2+"""
+    has_access, error_response, status_code = check_user_level(2)
+    if not has_access:
+        return error_response, status_code
     """Fetch emails from QQ"""
     data = request.json
     username = data.get('username', '')
@@ -1782,6 +2259,10 @@ def fetch_qq():
 
 @app.route('/api/fetch-163', methods=['POST'])
 def fetch_163():
+    """Fetch emails from 163.com - requires level 2+"""
+    has_access, error_response, status_code = check_user_level(2)
+    if not has_access:
+        return error_response, status_code
     """Fetch emails from 163.com"""
     data = request.json or {}
     limit = data.get('limit', 50)
@@ -1815,6 +2296,10 @@ def fetch_163():
 
 @app.route('/api/send-email', methods=['POST'])
 def send_email():
+    """Send email - requires level 2+"""
+    has_access, error_response, status_code = check_user_level(2)
+    if not has_access:
+        return error_response, status_code
     """Send email using configured SMTP servers with automatic fallback."""
     data = request.json or {}
     recipients_raw = data.get('to') or data.get('recipients')

@@ -1321,6 +1321,10 @@
                 <span class="label-short">S</span>
                 <span class="label-full">Settings</span>
             </button>
+            <button class="menu-button" onclick="showSecurity()">
+                <span class="label-short">SC</span>
+                <span class="label-full">Security</span>
+            </button>
             <div class="logout-button-container">
                 <button class="menu-button" onclick="handleLogout()">
                     <span class="label-short">L</span>
@@ -1586,6 +1590,30 @@
                             <div style="text-align: center; padding: 20px; color: #666;">Loading customer business types...</div>
                         </div>
                     </div>
+                </div>
+            </div>
+            <div id="security-content" class="hidden">
+                <div class="settings-section">
+                    <h3 style="font-family: Arial, sans-serif; font-size: 18px; color: #000000; margin-bottom: 15px; border-bottom: 1px solid #000000; padding-bottom: 10px;">Security - User Management</h3>
+                    <div style="margin-bottom: 20px;">
+                        <button class="form-button" onclick="loadUsers()" style="margin-right: 10px;">Refresh</button>
+                    </div>
+                    <div id="users-status" class="message hidden"></div>
+                    <table class="customer-table" style="margin-top: 20px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%;">Email</th>
+                                <th style="width: 10%;">Level</th>
+                                <th style="width: 10%;">Status</th>
+                                <th style="width: 15%;">Created At</th>
+                                <th style="width: 15%;">Last Login</th>
+                                <th style="width: 10%;">Login Count</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                            <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading users...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
             <div id="settings-content" class="hidden">
@@ -3141,6 +3169,7 @@
             document.getElementById('task-content').classList.add('hidden');
             document.getElementById('task-list-content').classList.add('hidden');
             document.getElementById('settings-content').classList.add('hidden');
+            document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Receive Mail';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
@@ -3160,6 +3189,7 @@
             document.getElementById('task-content').classList.add('hidden');
             document.getElementById('task-list-content').classList.add('hidden');
             document.getElementById('settings-content').classList.add('hidden');
+            document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Send Email';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
@@ -3174,6 +3204,7 @@
             document.getElementById('task-content').classList.add('hidden');
             document.getElementById('task-list-content').classList.add('hidden');
             document.getElementById('settings-content').classList.add('hidden');
+            document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Create Customer';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
@@ -3199,6 +3230,7 @@
             document.getElementById('task-list-content').classList.add('hidden');
             document.getElementById('settings-content').classList.add('hidden');
             document.getElementById('dropdown-list-content').classList.add('hidden');
+            document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Task';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
@@ -3635,6 +3667,7 @@
             document.getElementById('create-customer-content').classList.add('hidden');
             document.getElementById('task-list-content').classList.add('hidden');
             document.getElementById('dropdown-list-content').classList.remove('hidden');
+            document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Dropdown List';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
@@ -6320,6 +6353,7 @@
             document.getElementById('task-list-content').classList.remove('hidden');
             document.getElementById('settings-content').classList.add('hidden');
             document.getElementById('dropdown-list-content').classList.add('hidden');
+            document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Task List';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {

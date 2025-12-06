@@ -330,6 +330,19 @@ def initialize_database():
             INSERT INTO customer_business_types (name, display_order) VALUES (?, ?)
             """, default_business_types)
         
+        # Users/security table for tracking login history
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                level TEXT DEFAULT 'user',
+                status TEXT DEFAULT 'active',
+                created_at TEXT DEFAULT (datetime('now')),
+                last_login TEXT,
+                login_count INTEGER DEFAULT 0
+            )
+        """)
+        
         # Initialize or update countries list
         default_countries = [
             ('India', 1),
@@ -558,13 +571,18 @@ def insert_customer(name: str, email_suffix: str, country: str = None, website: 
 
 
 def fetch_customers():
+    user_email = session.get('user_email')
+    if not user_email:
+        return []
+    
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute("""
         SELECT id, name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, created_at, created_by
         FROM customers
+        WHERE created_by = ?
         ORDER BY datetime(created_at) DESC
-    """)
+    """, (user_email,))
     rows = cursor.fetchall()
     cursor.close()
     connection.close()
@@ -1408,6 +1426,38 @@ def verify_verification_code():
     if verify_code(email, code):
         session['logged_in'] = True
         session['user_email'] = email
+        
+        # Record login in users table
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            now_iso = datetime.utcnow().isoformat()
+            
+            # Check if user exists
+            cursor.execute("SELECT id, login_count FROM users WHERE email = ?", (email,))
+            user = cursor.fetchone()
+            
+            if user:
+                # Update existing user
+                cursor.execute("""
+                    UPDATE users 
+                    SET last_login = ?, login_count = login_count + 1
+                    WHERE email = ?
+                """, (now_iso, email))
+            else:
+                # Create new user
+                cursor.execute("""
+                    INSERT INTO users (email, level, status, created_at, last_login, login_count)
+                    VALUES (?, 'user', 'active', ?, ?, 1)
+                """, (email, now_iso, now_iso))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+        except Exception as e:
+            print(f"Error recording login: {str(e)}")
+            # Don't fail login if recording fails
+        
         return jsonify({'success': True, 'message': 'Login successful'})
     else:
         return jsonify({'error': 'Invalid or expired verification code'}), 401
@@ -1418,6 +1468,41 @@ def logout():
     """Log out the user"""
     session.clear()
     return jsonify({'success': True, 'message': 'Logged out successfully'})
+
+
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    """Get all users with login history"""
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT id, email, level, status, created_at, last_login, login_count
+            FROM users
+            ORDER BY last_login DESC, created_at DESC
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        connection.close()
+        
+        users = []
+        for row in rows:
+            users.append({
+                'id': row['id'],
+                'email': row['email'],
+                'level': row['level'] or 'user',
+                'status': row['status'] or 'active',
+                'created_at': row['created_at'],
+                'last_login': row['last_login'],
+                'login_count': row['login_count'] or 0
+            })
+        
+        return jsonify({'users': users})
+    except Exception as exc:
+        return jsonify({'error': f'Database error: {str(exc)}'}), 500
 
 
 @app.route('/api/gmail-auth', methods=['GET'])
@@ -1866,13 +1951,24 @@ def update_or_delete_customer(customer_id):
             else:
                 return jsonify({'error': 'Email address is required'}), 400
             
+            user_email = session.get('user_email')
+            if not user_email:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
             connection = get_db_connection()
             cursor = connection.cursor()
+            # Check if customer exists and belongs to user
+            cursor.execute("SELECT id FROM customers WHERE id = ? AND created_by = ?", (customer_id, user_email))
+            if not cursor.fetchone():
+                cursor.close()
+                connection.close()
+                return jsonify({'error': 'Customer not found or access denied'}), 404
+            
             cursor.execute("""
                 UPDATE customers 
                 SET name = ?, email_suffix = ?, country = ?, website = ?, source = ?, remark = ?, attachments = ?, company_name = ?, tel = ?, address = ?, business_type = ?
-                WHERE id = ?
-            """, (name, full_email, country, website, source, remark, attachments, company_name, tel, address, business_type, customer_id))
+                WHERE id = ? AND created_by = ?
+            """, (name, full_email, country, website, source, remark, attachments, company_name, tel, address, business_type, customer_id, user_email))
             connection.commit()
             updated = cursor.rowcount > 0
             cursor.close()
@@ -1901,9 +1997,13 @@ def update_or_delete_customer(customer_id):
     
     elif request.method == 'DELETE':
         try:
+            user_email = session.get('user_email')
+            if not user_email:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
             connection = get_db_connection()
             cursor = connection.cursor()
-            cursor.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
+            cursor.execute("DELETE FROM customers WHERE id = ? AND created_by = ?", (customer_id, user_email))
             connection.commit()
             deleted = cursor.rowcount > 0
             cursor.close()
@@ -1936,14 +2036,18 @@ def handle_emails():
                 return jsonify({'error': 'Invalid days parameter'}), 400
 
         # Build SQL query with optional date filter
+        user_email = session.get('user_email')
+        if not user_email:
+            return jsonify({'error': 'Not authenticated'}), 401
+        
         connection = get_db_connection()
         cursor = connection.cursor()
         query = """
             SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at, created_by
             FROM emails
-            WHERE provider = ?
+            WHERE provider = ? AND created_by = ?
         """
-        params = [provider]
+        params = [provider, user_email]
         if days > 0:
             query += " AND datetime(fetched_at) >= datetime('now', ?)"
             params.append(f'-{days} days')
@@ -2002,16 +2106,21 @@ def get_emails_by_customer():
     connection = get_db_connection()
     cursor = connection.cursor()
     
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
     # Search for emails where the customer email appears in from_addr or to_addr
+    # AND the email was created by the logged-in user
     query = """
         SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at, created_by
         FROM emails
-        WHERE from_addr LIKE ? OR to_addr LIKE ?
+        WHERE (from_addr LIKE ? OR to_addr LIKE ?) AND created_by = ?
         ORDER BY datetime(date) DESC, datetime(fetched_at) DESC
     """
     # Use LIKE with % wildcards to match email addresses
     email_pattern = f'%{customer_email}%'
-    cursor.execute(query, (email_pattern, email_pattern))
+    cursor.execute(query, (email_pattern, email_pattern, user_email))
     rows = cursor.fetchall()
     cursor.close()
     connection.close()
@@ -2065,6 +2174,10 @@ def handle_tasks():
                 connection.rollback()  # Column already exists, rollback any partial changes
                 pass
             
+            user_email = session.get('user_email')
+            if not user_email:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
             # Try the query with email column first
             try:
                 cursor.execute("""
@@ -2101,8 +2214,9 @@ def handle_tasks():
                          ORDER BY CASE WHEN t.email IS NOT NULL AND c.email_suffix = t.email THEN 1 ELSE 2 END, c.id
                          LIMIT 1) AS customer_business_type
                     FROM tasks t
+                    WHERE t.created_by = ?
                     ORDER BY datetime(t.created_at) DESC
-                """)
+                """, (user_email,))
             except sqlite3.OperationalError as e:
                 # If email column still doesn't exist, use fallback query
                 if 'no such column' in str(e).lower() and 'email' in str(e).lower():
@@ -2135,8 +2249,9 @@ def handle_tasks():
                              ORDER BY c.id
                              LIMIT 1) AS customer_business_type
                         FROM tasks t
+                        WHERE t.created_by = ?
                         ORDER BY datetime(t.created_at) DESC
-                    """)
+                    """, (user_email,))
                 else:
                     raise  # Re-raise if it's a different error
             rows = cursor.fetchall()
@@ -2257,9 +2372,13 @@ def handle_single_task(task_id):
     """Update or delete a task by ID"""
     if request.method == 'DELETE':
         try:
+            user_email = session.get('user_email')
+            if not user_email:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
             connection = get_db_connection()
             cursor = connection.cursor()
-            cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            cursor.execute("DELETE FROM tasks WHERE id = ? AND created_by = ?", (task_id, user_email))
             connection.commit()
             deleted = cursor.rowcount > 0
             cursor.close()
@@ -2294,8 +2413,19 @@ def handle_single_task(task_id):
             except (TypeError, ValueError):
                 return jsonify({'error': 'Invalid attachments format'}), 400
         
+        user_email = session.get('user_email')
+        if not user_email:
+            return jsonify({'error': 'Not authenticated'}), 401
+        
         connection = get_db_connection()
         cursor = connection.cursor()
+        
+        # Check if task exists and belongs to user
+        cursor.execute("SELECT id FROM tasks WHERE id = ? AND created_by = ?", (task_id, user_email))
+        if not cursor.fetchone():
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'Task not found or access denied'}), 404
         
         update_fields = [
             ('catalogue', catalogue),
@@ -2315,8 +2445,9 @@ def handle_single_task(task_id):
             set_clause = f"{set_clause}, updated_at = datetime('now')"
         values = [value for _, value in update_fields]
         values.append(task_id)
+        values.append(user_email)
         
-        cursor.execute(f"UPDATE tasks SET {set_clause} WHERE id = ?", values)
+        cursor.execute(f"UPDATE tasks SET {set_clause} WHERE id = ? AND created_by = ?", values)
         connection.commit()
         updated = cursor.rowcount > 0
         cursor.close()
@@ -2338,6 +2469,10 @@ def get_tasks_by_customer():
     
     if not company_name or not customer:
         return jsonify({'error': 'Both company_name and customer query parameters are required'}), 400
+    
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'error': 'Not authenticated'}), 401
     
     try:
         connection = get_db_connection()
@@ -2374,9 +2509,9 @@ def get_tasks_by_customer():
                      ORDER BY CASE WHEN t.email IS NOT NULL AND c.email_suffix = t.email THEN 1 ELSE 2 END, c.id
                      LIMIT 1) AS customer_business_type
                 FROM tasks t
-                WHERE t.customer = ?
+                WHERE t.customer = ? AND t.created_by = ?
                 ORDER BY datetime(t.updated_at) DESC, datetime(t.created_at) DESC
-            """, (customer,))
+            """, (customer, user_email))
         except sqlite3.OperationalError as e:
             # If email column still doesn't exist, use fallback query
             if 'no such column' in str(e).lower() and 'email' in str(e).lower():
@@ -2406,9 +2541,9 @@ def get_tasks_by_customer():
                          ORDER BY c.id
                          LIMIT 1) AS customer_business_type
                     FROM tasks t
-                    WHERE t.customer = ?
+                    WHERE t.customer = ? AND t.created_by = ?
                     ORDER BY datetime(t.updated_at) DESC, datetime(t.created_at) DESC
-                """, (customer,))
+                """, (customer, user_email))
             else:
                 raise
         

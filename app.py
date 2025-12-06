@@ -121,7 +121,8 @@ def initialize_database():
                 source TEXT,
                 address TEXT,
                 business_type TEXT,
-                created_at TEXT DEFAULT (datetime('now'))
+                created_at TEXT DEFAULT (datetime('now')),
+                created_by TEXT
             )
         """)
         # Migrate existing customers table to add new columns if they don't exist
@@ -161,6 +162,12 @@ def initialize_database():
             cursor.execute("ALTER TABLE customers ADD COLUMN business_type TEXT")
         except sqlite3.OperationalError:
             pass  # Column already exists
+        try:
+            cursor.execute("ALTER TABLE customers ADD COLUMN created_by TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        # Update existing records to set created_by
+        cursor.execute("UPDATE customers SET created_by = 'eric.brilliant@gmail.com' WHERE created_by IS NULL")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS emails (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,6 +183,7 @@ def initialize_database():
                 sequence TEXT,
                 attachments TEXT,
                 fetched_at TEXT DEFAULT (datetime('now')),
+                created_by TEXT,
                 UNIQUE(provider, email_uid)
             )
         """)
@@ -183,6 +191,10 @@ def initialize_database():
         email_columns = {row['name'] for row in cursor.fetchall()}
         if 'attachments' not in email_columns:
             cursor.execute("ALTER TABLE emails ADD COLUMN attachments TEXT")
+        if 'created_by' not in email_columns:
+            cursor.execute("ALTER TABLE emails ADD COLUMN created_by TEXT")
+        # Update existing records to set created_by
+        cursor.execute("UPDATE emails SET created_by = 'eric.brilliant@gmail.com' WHERE created_by IS NULL")
         
         # OAuth tokens table for Gmail API
         cursor.execute("""
@@ -247,7 +259,8 @@ def initialize_database():
                 attachments TEXT,
                 deadline TEXT,
                 created_at TEXT DEFAULT (datetime('now')),
-                updated_at TEXT DEFAULT (datetime('now'))
+                updated_at TEXT DEFAULT (datetime('now')),
+                created_by TEXT
             )
         """)
         try:
@@ -263,6 +276,10 @@ def initialize_database():
         if 'updated_at' not in task_columns:
             cursor.execute("ALTER TABLE tasks ADD COLUMN updated_at TEXT")
             cursor.execute("UPDATE tasks SET updated_at = created_at WHERE updated_at IS NULL")
+        if 'created_by' not in task_columns:
+            cursor.execute("ALTER TABLE tasks ADD COLUMN created_by TEXT")
+        # Update existing records to set created_by
+        cursor.execute("UPDATE tasks SET created_by = 'eric.brilliant@gmail.com' WHERE created_by IS NULL")
         # Countries table for dropdown options
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS countries (
@@ -524,12 +541,14 @@ def initialize_database():
             connection.close()
 
 
-def insert_customer(name: str, email_suffix: str, country: str = None, website: str = None, remark: str = None, attachments: str = None, company_name: str = None, tel: str = None, source: str = None, address: str = None, business_type: str = None) -> int:
+def insert_customer(name: str, email_suffix: str, country: str = None, website: str = None, remark: str = None, attachments: str = None, company_name: str = None, tel: str = None, source: str = None, address: str = None, business_type: str = None, created_by: str = None) -> int:
+    if created_by is None:
+        created_by = session.get('user_email', 'eric.brilliant@gmail.com')
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute(
-        "INSERT INTO customers (name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type)
+        "INSERT INTO customers (name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, created_by)
     )
     connection.commit()
     customer_id = cursor.lastrowid
@@ -542,7 +561,7 @@ def fetch_customers():
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute("""
-        SELECT id, name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, created_at
+        SELECT id, name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, created_at, created_by
         FROM customers
         ORDER BY datetime(created_at) DESC
     """)
@@ -601,6 +620,10 @@ def fetch_customers():
             business_type = row['business_type'] if row['business_type'] else None
         except (KeyError, IndexError):
             business_type = None
+        try:
+            created_by = row['created_by'] if row['created_by'] else None
+        except (KeyError, IndexError):
+            created_by = None
 
         customers.append({
             'id': row['id'],
@@ -615,7 +638,8 @@ def fetch_customers():
             'tel': tel,
             'address': address,
             'business_type': business_type,
-            'created_at': created_at
+            'created_at': created_at,
+            'created_by': created_by
         })
     return customers
 
@@ -626,6 +650,7 @@ def save_emails(provider: str, emails: list[dict]):
     connection = get_db_connection()
     cursor = connection.cursor()
     now_iso = datetime.utcnow().isoformat()
+    created_by = session.get('user_email', 'eric.brilliant@gmail.com')
     rows = []
     for email in emails:
         email_uid = str(email.get('id') or email.get('email_uid') or '')
@@ -648,7 +673,8 @@ def save_emails(provider: str, emails: list[dict]):
             email.get('html_body'),
             email.get('sequence'),
             attachments_json,
-            now_iso
+            now_iso,
+            created_by
         ))
     if not rows:
         cursor.close()
@@ -668,8 +694,9 @@ def save_emails(provider: str, emails: list[dict]):
             html_body,
             sequence,
             attachments,
-            fetched_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            fetched_at,
+            created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(provider, email_uid) DO UPDATE SET
             subject = excluded.subject,
             from_addr = excluded.from_addr,
@@ -680,7 +707,8 @@ def save_emails(provider: str, emails: list[dict]):
             html_body = excluded.html_body,
             sequence = excluded.sequence,
             attachments = excluded.attachments,
-            fetched_at = excluded.fetched_at
+            fetched_at = excluded.fetched_at,
+            created_by = COALESCE(excluded.created_by, emails.created_by)
     """, rows)
     connection.commit()
     cursor.close()
@@ -1315,7 +1343,8 @@ def index():
     """Main page - requires login"""
     if not session.get('logged_in'):
         return redirect(url_for('login'))
-    return render_template('index.html', version=app.config['VERSION'])
+    user_email = session.get('user_email', '')
+    return render_template('index.html', version=app.config['VERSION'], user_email=user_email)
 
 
 @app.route('/api/send-verification-code', methods=['POST'])
@@ -1788,7 +1817,8 @@ def customers_endpoint():
         return jsonify({'error': 'Email address is required'}), 400
 
     try:
-        customer_id = insert_customer(name, full_email, country, website, remark, attachments, company_name, tel, source, address, business_type)
+        created_by = session.get('user_email', 'eric.brilliant@gmail.com')
+        customer_id = insert_customer(name, full_email, country, website, remark, attachments, company_name, tel, source, address, business_type, created_by)
         return jsonify({
             'id': customer_id,
             'name': name,
@@ -1909,7 +1939,7 @@ def handle_emails():
         connection = get_db_connection()
         cursor = connection.cursor()
         query = """
-            SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at
+            SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at, created_by
             FROM emails
             WHERE provider = ?
         """
@@ -1941,7 +1971,8 @@ def handle_emails():
                 'html_body': row[8],
                 'sequence': row[9],
                 'attachments': attachments,
-                'fetched_at': row[11]
+                'fetched_at': row[11],
+                'created_by': row[12] if len(row) > 12 else None
             })
 
         return jsonify({'provider': provider, 'emails': emails})
@@ -1973,7 +2004,7 @@ def get_emails_by_customer():
     
     # Search for emails where the customer email appears in from_addr or to_addr
     query = """
-        SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at
+        SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at, created_by
         FROM emails
         WHERE from_addr LIKE ? OR to_addr LIKE ?
         ORDER BY datetime(date) DESC, datetime(fetched_at) DESC
@@ -2003,7 +2034,8 @@ def get_emails_by_customer():
             'html_body': row[8],
             'sequence': row[9],
             'attachments': attachments,
-            'fetched_at': row[11]
+            'fetched_at': row[11],
+            'created_by': row[12] if len(row) > 12 else None
         })
     
     return jsonify({'customer_email': customer_email, 'emails': emails})
@@ -2052,6 +2084,7 @@ def handle_tasks():
                         t.deadline,
                         t.created_at,
                         t.updated_at,
+                        t.created_by,
                         (SELECT company_name FROM customers c 
                          WHERE (t.email IS NOT NULL AND c.email_suffix = t.email) 
                             OR (t.customer IS NOT NULL AND c.name = t.customer)
@@ -2088,6 +2121,7 @@ def handle_tasks():
                             t.deadline,
                             t.created_at,
                             t.updated_at,
+                            t.created_by,
                             (SELECT company_name FROM customers c 
                              WHERE c.name = t.customer
                              ORDER BY c.id
@@ -2117,6 +2151,11 @@ def handle_tasks():
                 except (TypeError, ValueError):
                     attachments = []
                 
+                try:
+                    created_by = row['created_by']
+                except (KeyError, IndexError):
+                    created_by = None
+                
                 tasks.append({
                     'id': row['id'],
                     'sequence': row['sequence'],
@@ -2128,6 +2167,7 @@ def handle_tasks():
                     'deadline': row['deadline'],
                     'created_at': row['created_at'],
                     'updated_at': row['updated_at'],
+                    'created_by': created_by,
                     'company_name': row['company_name'],
                     'source': row['customer_source'],
                     'business_type': row['customer_business_type']
@@ -2182,10 +2222,11 @@ def handle_tasks():
             
             connection = get_db_connection()
             cursor = connection.cursor()
+            created_by = session.get('user_email', 'eric.brilliant@gmail.com')
             cursor.execute("""
-                INSERT INTO tasks (sequence, customer, email, catalogue, template, attachments, deadline, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-            """, (sequence, customer, email, catalogue, template, attachments_json, deadline))
+                INSERT INTO tasks (sequence, customer, email, catalogue, template, attachments, deadline, created_at, updated_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
+            """, (sequence, customer, email, catalogue, template, attachments_json, deadline, created_by))
             connection.commit()
             task_id = cursor.lastrowid
             cursor.execute("SELECT created_at, updated_at FROM tasks WHERE id = ?", (task_id,))
@@ -2316,6 +2357,7 @@ def get_tasks_by_customer():
                     t.deadline,
                     t.created_at,
                     t.updated_at,
+                    t.created_by,
                     (SELECT company_name FROM customers c 
                      WHERE (t.email IS NOT NULL AND c.email_suffix = t.email) 
                         OR (t.customer IS NOT NULL AND c.name = t.customer)
@@ -2350,6 +2392,7 @@ def get_tasks_by_customer():
                         t.deadline,
                         t.created_at,
                         t.updated_at,
+                        t.created_by,
                         (SELECT company_name FROM customers c 
                          WHERE c.name = t.customer
                          ORDER BY c.id
@@ -2386,6 +2429,11 @@ def get_tasks_by_customer():
             except (TypeError, ValueError):
                 attachments = []
             
+            try:
+                created_by = row['created_by']
+            except (KeyError, IndexError):
+                created_by = None
+            
             tasks.append({
                 'id': row['id'],
                 'sequence': row['sequence'],
@@ -2396,6 +2444,7 @@ def get_tasks_by_customer():
                 'attachments': attachments,
                 'deadline': row['deadline'],
                 'created_at': row['created_at'],
+                'created_by': created_by,
                 'updated_at': row['updated_at'],
                 'company_name': row['company_name'],
                 'source': row['customer_source'],

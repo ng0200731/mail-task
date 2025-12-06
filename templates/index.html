@@ -127,6 +127,9 @@
             margin-bottom: 20px;
             padding-bottom: 10px;
             border-bottom: 2px solid #000000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .content-header h2 {
@@ -134,6 +137,15 @@
             font-size: 24px;
             color: #000000;
             margin-bottom: 5px;
+        }
+
+        .user-email-display {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            color: #000000;
+            font-weight: normal;
+            margin-left: auto;
+            padding-left: 20px;
         }
 
         .version-info {
@@ -1324,8 +1336,13 @@
                 </div>
             </div>
             <div class="content-header">
-                <h2 id="content-title">Receive Mail</h2>
-                <div class="version-info">Version: <span id="version">v{{ version }}</span></div>
+                <div>
+                    <h2 id="content-title">Receive Mail</h2>
+                    <div class="version-info">Version: <span id="version">v{{ version }}</span></div>
+                </div>
+                {% if user_email %}
+                <div class="user-email-display">{{ user_email }}</div>
+                {% endif %}
             </div>
             <div id="receive-mail-content">
                 <button class="form-button" onclick="fetchGmailEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch Gmail</button>
@@ -1438,6 +1455,7 @@
                                 <th style="width: 12%;">Remark</th>
                                 <th style="width: 10%;">Attachments</th>
                                 <th style="width: 10%;">Created At</th>
+                                <th style="width: 12%;">Created By</th>
                                 <th style="width: 6%;">Actions</th>
                             </tr>
                             <tr>
@@ -1452,6 +1470,7 @@
                                 <th><input type="text" class="customer-filter-input" data-field="remark" placeholder="Filter remark"></th>
                                 <th><input type="text" class="customer-filter-input" data-field="attachments" placeholder="Filter attachments"></th>
                                 <th><input type="text" class="customer-filter-input" data-field="created_at" placeholder="Filter created"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="created_by" placeholder="Filter created by"></th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -6362,6 +6381,7 @@
                 `data-deadline="${escapeHtml(task.deadline || '')}"`,
                 `data-created_at="${escapeHtml(task.created_at || '')}"`,
                 `data-updated_at="${escapeHtml(task.updated_at || '')}"`,
+                `data-created_by="${escapeHtml(task.created_by || '')}"`,
                 `data-source="${escapeHtml(source)}"`,
                 `data-attachments="${escapeHtml(attachmentsText)}"`
             ].join(' ');
@@ -6380,6 +6400,7 @@
                         </td>
                         <td>${task.deadline ? escapeHtml(task.deadline) : ''}</td>
                         <td>${createdAtDisplay}</td>
+                        <td>${escapeHtml(task.created_by || '')}</td>
                         <td>${escapeHtml(source)}</td>
                         <td>${lastUpdatedDisplay}</td>
                         <td>${renderTaskAttachments(task)}</td>
@@ -6413,6 +6434,7 @@
                     </td>
                     <td><input type="date" class="inline-task-input" data-field="deadline" value="${formatDateForInput(task.deadline || '')}"></td>
                     <td>${createdAtDisplay}</td>
+                    <td>${escapeHtml(task.created_by || '')}</td>
                     <td>${escapeHtml(source)}</td>
                     <td>${lastUpdatedDisplay}</td>
                     <td>${renderTaskAttachments(task)}</td>
@@ -6469,6 +6491,7 @@
                                             <th>Template</th>
                                             <th>Deadline</th>
                                             <th>Created At</th>
+                                            <th>Created By</th>
                                             <th>Source</th>
                                             <th>Last Updated</th>
                                             <th>Attachments</th>
@@ -6484,6 +6507,7 @@
                                             <th><input type="text" class="task-filter-input" data-field="template" placeholder="Filter template"></th>
                                             <th><input type="text" class="task-filter-input" data-field="deadline" placeholder="Filter deadline"></th>
                                             <th><input type="text" class="task-filter-input" data-field="created_at" placeholder="Filter date"></th>
+                                            <th><input type="text" class="task-filter-input" data-field="created_by" placeholder="Filter created by"></th>
                                             <th><input type="text" class="task-filter-input" data-field="source" placeholder="Filter source"></th>
                                             <th><input type="text" class="task-filter-input" data-field="updated_at" placeholder="Filter last updated"></th>
                                             <th><input type="text" class="task-filter-input" data-field="attachments" placeholder="Filter attachments"></th>
@@ -8983,7 +9007,8 @@
                     data-business_type="${escapeHtml(customer.business_type || '')}"
                     data-remark="${escapeHtml(plainRemark)}"
                     data-attachments="${escapeHtml(attachmentsText)}"
-                    data-created_at="${escapeHtml(customer.created_at || '')}">
+                    data-created_at="${escapeHtml(customer.created_at || '')}"
+                    data-created_by="${escapeHtml(customer.created_by || '')}">
                     <td class="editable-cell" data-field="company_name">${escapeHtml(customer.company_name || '')}</td>
                     <td class="editable-cell" data-field="name">${escapeHtml(customer.name || '')}</td>
                     <td class="editable-cell" data-field="email_suffix">${escapeHtml(customer.email_suffix || '')}</td>
@@ -8995,6 +9020,7 @@
                     <td class="editable-cell" data-field="remark" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${remark}</td>
                     <td style="max-width: 150px; font-size: 11px;">${attachmentsHtml || '-'}</td>
                     <td>${escapeHtml(customer.created_at ? new Date(customer.created_at).toLocaleString() : '')}</td>
+                    <td>${escapeHtml(customer.created_by || '')}</td>
                     <td>
                         <button class="form-button edit-customer-btn" onclick="editCustomer(${customer.id})" style="padding: 5px 10px; font-size: 12px; cursor: pointer; margin-right: 5px;">Edit</button>
                         <button class="form-button save-customer-btn hidden" onclick="saveCustomerEdit(${customer.id})" style="padding: 5px 10px; font-size: 12px; cursor: pointer; margin-right: 5px; background-color: #28a745; color: white;">Save</button>

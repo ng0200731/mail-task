@@ -1607,6 +1607,21 @@
                             <div style="text-align: center; padding: 20px; color: #666;">Loading customer business types...</div>
                         </div>
                     </div>
+                    <h3 id="task-status-dropdown-header" style="margin-bottom: 15px; margin-top: 30px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px;" onclick="toggleTaskStatusDropdown()">
+                        <span id="task-status-dropdown-icon" style="display: inline-block; transition: transform 0.2s;">▶</span>
+                        <span>Task - Status</span>
+                    </h3>
+                    <div id="task-status-dropdown-content" style="display: none;">
+                        <div style="margin-bottom: 20px; position: relative;">
+                            <input type="text" id="new-task-status-input" placeholder="Enter new task status name" style="width: 300px; padding: 8px; border: 1px solid #000000; margin-right: 10px;" onkeypress="if(event.key === 'Enter') addTaskStatus()" oninput="showTaskStatusSuggestions()" onfocus="showTaskStatusSuggestions()" onblur="setTimeout(() => hideTaskStatusSuggestions(), 200)">
+                            <div id="task-status-suggestions" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; width: 300px; z-index: 1000;"></div>
+                            <button class="form-button" onclick="addTaskStatus()" style="padding: 8px 20px;">Add New Status</button>
+                            <div id="task-status-duplicate-warning" style="color: #dc3545; font-size: 12px; margin-top: 5px; display: none;"></div>
+                        </div>
+                        <div id="task-statuses-list" style="border: 1px solid #000000; padding: 15px; background-color: #ffffff;">
+                            <div style="text-align: center; padding: 20px; color: #666;">Loading task statuses...</div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div id="security-content" class="hidden">
@@ -2078,6 +2093,12 @@
                         </div>
                     </div>
                     <div class="form-group">
+                        <label for="task-status">Status</label>
+                        <select id="task-status" style="width: 100%; padding: 8px; border: 1px solid #000000;">
+                            <option value="">-- Select Status --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label for="task-deadline">Deadline</label>
                         <input type="date" id="task-deadline" style="width: 100%; padding: 8px; border: 1px solid #000000;">
                     </div>
@@ -2215,6 +2236,7 @@
         const taskSequenceInput = document.getElementById('task-sequence');
         const taskAttachmentsDiv = document.getElementById('task-attachments');
         const taskCatalogueInput = document.getElementById('task-catalogue');
+        const taskStatusInput = document.getElementById('task-status');
         const taskDeadlineInput = document.getElementById('task-deadline');
         const taskNotesEditorDiv = document.getElementById('task-notes-editor');
         const editTaskModal = document.getElementById('edit-task-modal');
@@ -3364,6 +3386,12 @@
                                 </select>
                             </div>
                             <div class="form-group" style="flex: 1; min-width: 200px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Status</label>
+                                <select id="task-form-status" required style="width: 100%; padding: 8px; border: 1px solid #000000;">
+                                    <option value="">-- Select Status --</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1; min-width: 200px;">
                                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Deadline</label>
                                 <input type="date" id="task-form-deadline" style="width: 100%; padding: 8px; border: 1px solid #000000;">
                             </div>
@@ -3629,6 +3657,7 @@
             const customerValueInput = document.getElementById('task-form-customer-value');
             const emailInput = document.getElementById('task-form-email');
             const catalogueSelect = document.getElementById('task-form-catalogue');
+            const statusSelect = document.getElementById('task-form-status');
             const deadlineInput = document.getElementById('task-form-deadline');
             
             if (!customerInput || !customerValueInput || !emailInput || !catalogueSelect) {
@@ -3646,6 +3675,7 @@
             const customerName = customerInput.value;
             const email = emailInput.value.trim();
             const catalogue = catalogueSelect.value;
+            const status = statusSelect ? statusSelect.value : 'open';
             const deadline = deadlineInput ? deadlineInput.value.trim() : '';
             
             if (!customerEmailSuffix || !customerName) {
@@ -3685,6 +3715,7 @@
                 email: email,
                 catalogue: catalogue,
                 template: template,
+                status: status,
                 deadline: deadline || null,
                 attachments: (window.taskFormAttachments || []).map(att => ({
                     filename: att.filename,
@@ -3747,6 +3778,8 @@
             loadTaskTypes();
             // Load countries list
             loadCountries();
+            // Load task statuses list
+            loadTaskStatuses();
         }
 
         function handleLogout() {
@@ -4369,6 +4402,9 @@
                     taskFormCatalogue.value = currentValue;
                 }
             }
+            
+            // Update task status dropdowns
+            updateTaskStatusDropdowns();
             
             // Store task types for filtering
             TASK_TYPES = sortedTypes.map(type => type.name);
@@ -5977,6 +6013,9 @@
 
             // Load task types for dropdown
             loadTaskTypesForDropdown();
+            
+            // Load task statuses for dropdown
+            updateTaskStatusDropdowns();
 
             taskSequenceInput.value = email.sequence || 'N/A';
             if (taskDeadlineInput) {
@@ -6554,6 +6593,7 @@
             const customerEmailSuffix = customerValueInput ? customerValueInput.value : '';
             const customer = taskCustomerSelect ? taskCustomerSelect.value : '';
             const email = taskEmailInput.value;
+            const status = taskStatusInput ? (taskStatusInput.value || 'open') : 'open';
             const deadline = taskDeadlineInput ? (taskDeadlineInput.value || '').trim() : '';
             
             // Validate required fields
@@ -6574,6 +6614,7 @@
                 email: email,
                 catalogue: catalogue,
                 template: template,
+                status: status,
                 attachments: window.taskModalAttachments || [],
                 deadline: deadline || null
             };
@@ -6671,6 +6712,7 @@
                 `data-email="${escapeHtml(task.email || '')}"`,
                 `data-catalogue="${escapeHtml(task.catalogue || '')}"`,
                 `data-template="${escapeHtml(task.template || '')}"`,
+                `data-status="${escapeHtml(task.status || 'open')}"`,
                 `data-deadline="${escapeHtml(task.deadline || '')}"`,
                 `data-created_at="${escapeHtml(task.created_at || '')}"`,
                 `data-updated_at="${escapeHtml(task.updated_at || '')}"`,
@@ -6691,6 +6733,7 @@
                         <td class="task-template-cell" title="${escapeHtml(task.template || '')}">
                             ${task.template || ''}
                         </td>
+                        <td>${escapeHtml(task.status || 'open')}</td>
                         <td>${task.deadline ? escapeHtml(task.deadline) : ''}</td>
                         <td>${createdAtDisplay}</td>
                         <td>${escapeHtml(task.created_by || '')}</td>
@@ -6710,6 +6753,20 @@
             }
 
             const typeOptions = getTaskTypeOptions(task.catalogue || '');
+            const currentStatus = task.status || '';
+            // Generate status options from cache or fetch
+            let statusOptions = '<option value="">-- Select Status --</option>';
+            if (taskStatusesCache && taskStatusesCache.length > 0) {
+                const sortedStatuses = [...taskStatusesCache].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                statusOptions += sortedStatuses.map(s => 
+                    `<option value="${escapeHtml(s.name)}" ${currentStatus === s.name ? 'selected' : ''}>${escapeHtml(s.name)}</option>`
+                ).join('');
+            } else {
+                // Fallback to hardcoded
+                statusOptions += `<option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Open</option>`;
+                statusOptions += `<option value="close" ${currentStatus === 'close' ? 'selected' : ''}>Close</option>`;
+            }
+            
             return `
                 <tr class="task-editing-row" ${rowAttributes}>
                     <td>${escapeHtml(task.sequence || '')}</td>
@@ -6724,6 +6781,11 @@
                     </td>
                     <td>
                         <textarea class="inline-task-template-input" data-field="template" placeholder="Enter template...">${escapeTextareaContent(task.template || '')}</textarea>
+                    </td>
+                    <td>
+                        <select class="inline-task-input" data-field="status" id="inline-task-status-${task.id}">
+                            ${statusOptions}
+                        </select>
                     </td>
                     <td><input type="date" class="inline-task-input" data-field="deadline" value="${formatDateForInput(task.deadline || '')}"></td>
                     <td>${createdAtDisplay}</td>
@@ -6791,6 +6853,7 @@
                                             <th>Email</th>
                                             <th>Type</th>
                                             <th>Template</th>
+                                            <th>Status</th>
                                             <th>Deadline</th>
                                             <th>Created At</th>
                                             <th>Created By</th>
@@ -6807,6 +6870,7 @@
                                             <th><input type="text" class="task-filter-input" data-field="email" placeholder="Filter email"></th>
                                             <th><input type="text" class="task-filter-input" data-field="catalogue" placeholder="Filter type"></th>
                                             <th><input type="text" class="task-filter-input" data-field="template" placeholder="Filter template"></th>
+                                            <th><input type="text" class="task-filter-input" data-field="status" placeholder="Filter status"></th>
                                             <th><input type="text" class="task-filter-input" data-field="deadline" placeholder="Filter deadline"></th>
                                             <th><input type="text" class="task-filter-input" data-field="created_at" placeholder="Filter date"></th>
                                             <th><input type="text" class="task-filter-input" data-field="created_by" placeholder="Filter created by"></th>
@@ -6905,7 +6969,10 @@
                 alert('Task not found');
                 return;
             }
-            ensureTaskTypesLoaded().then(() => {
+            Promise.all([
+                ensureTaskTypesLoaded(),
+                taskStatusesCache && taskStatusesCache.length > 0 ? Promise.resolve() : fetch('/api/task-statuses').then(r => r.json()).then(s => { taskStatusesCache = s; })
+            ]).then(() => {
                 if (inlineTaskEditId && inlineTaskEditId !== taskId) {
                     cancelInlineTaskEdit();
                 }
@@ -6916,7 +6983,7 @@
                     textarea.focus();
                 }
             }).catch(() => {
-                alert('Unable to load task types');
+                alert('Unable to load task types or statuses');
             });
         }
 
@@ -6938,6 +7005,7 @@
                     const emailInput = inlineRow.querySelector('.inline-task-input[data-field="email"]');
                     const customerInput = inlineRow.querySelector('.inline-task-input[data-field="customer"]');
                     const deadlineInput = inlineRow.querySelector('.inline-task-input[data-field="deadline"]');
+                    const statusSelect = inlineRow.querySelector('.inline-task-input[data-field="status"]');
 
                     const catalogue = typeSelect ? typeSelect.value : '';
                     if (!catalogue) {
@@ -6955,6 +7023,7 @@
                         template,
                         email: emailInput ? emailInput.value.trim() : '',
                         customer: customerInput ? customerInput.value.trim() : '',
+                        status: statusSelect ? statusSelect.value.trim() : '',
                         deadline: deadlineInput ? (deadlineInput.value || null) : null
                     };
 
@@ -8114,6 +8183,46 @@
             
             // Update CUSTOMER_BUSINESS_TYPES array for the business type input field
             CUSTOMER_BUSINESS_TYPES = sortedTypes.map(t => t.name);
+        }
+
+        function updateTaskStatusDropdowns() {
+            fetch('/api/task-statuses')
+                .then(response => response.json())
+                .then(statuses => {
+                    // Sort by display_order
+                    const sortedStatuses = [...statuses].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                    
+                    // Update task form status dropdown
+                    const taskFormStatus = document.getElementById('task-form-status');
+                    if (taskFormStatus) {
+                        const currentValue = taskFormStatus.value;
+                        taskFormStatus.innerHTML = '<option value="">-- Select Status --</option>' + 
+                            sortedStatuses.map(status => `<option value="${escapeHtml(status.name)}">${escapeHtml(status.name)}</option>`).join('');
+                        if (currentValue) {
+                            taskFormStatus.value = currentValue;
+                        } else if (sortedStatuses.length > 0) {
+                            // Default to first status (usually 'open')
+                            taskFormStatus.value = sortedStatuses[0].name;
+                        }
+                    }
+                    
+                    // Update task modal status dropdown
+                    const taskModalStatus = document.getElementById('task-status');
+                    if (taskModalStatus) {
+                        const currentValue = taskModalStatus.value;
+                        taskModalStatus.innerHTML = '<option value="">-- Select Status --</option>' + 
+                            sortedStatuses.map(status => `<option value="${escapeHtml(status.name)}">${escapeHtml(status.name)}</option>`).join('');
+                        if (currentValue) {
+                            taskModalStatus.value = currentValue;
+                        } else if (sortedStatuses.length > 0) {
+                            // Default to first status (usually 'open')
+                            taskModalStatus.value = sortedStatuses[0].name;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading task statuses for dropdown:', error);
+                });
         }
 
         // Customer source dropdown functions for Create Customer form
@@ -9417,6 +9526,310 @@
             }
             
             window.location.href = '/api/export/tasks';
+        }
+
+        let taskStatusesCache = [];
+
+        function toggleTaskStatusDropdown() {
+            const header = document.getElementById('task-status-dropdown-header');
+            const content = document.getElementById('task-status-dropdown-content');
+            const icon = document.getElementById('task-status-dropdown-icon');
+            if (!header || !content || !icon) return;
+            
+            if (content.style.display === 'none' || !content.style.display) {
+                content.style.display = 'block';
+                icon.textContent = '▼';
+                icon.style.transform = 'rotate(90deg)';
+                loadTaskStatuses();
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▶';
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function loadTaskStatuses() {
+            fetch('/api/task-statuses')
+                .then(response => response.json())
+                .then(statuses => {
+                    taskStatusesCache = statuses;
+                    renderTaskStatusesList(statuses);
+                })
+                .catch(error => {
+                    console.error('Error loading task statuses:', error);
+                    const container = document.getElementById('task-statuses-list');
+                    if (container) {
+                        container.innerHTML = '<div style="padding: 20px; color: #dc3545;">Error loading task statuses</div>';
+                    }
+                });
+        }
+
+        let currentTaskStatusDragId = null;
+
+        function renderTaskStatusesList(statuses) {
+            const container = document.getElementById('task-statuses-list');
+            if (!container) return;
+            
+            if (!statuses || statuses.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">No task statuses found. Add one above.</div>';
+                return;
+            }
+            
+            // Sort by display_order
+            const sortedStatuses = [...statuses].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            
+            container.innerHTML = sortedStatuses.map(status => `
+                <div class="task-type-item" draggable="true" 
+                     ondragstart="currentTaskStatusDragId = ${status.id}; event.dataTransfer.effectAllowed = 'move';" 
+                     ondragover="event.preventDefault(); event.dataTransfer.dropEffect = 'move';" 
+                     ondrop="handleTaskStatusDrop(event, ${status.id})" 
+                     ondragenter="event.preventDefault(); this.style.backgroundColor = '#e0e0e0';" 
+                     ondragleave="this.style.backgroundColor = '';" 
+                     style="padding: 10px; margin-bottom: 5px; border: 1px solid #ddd; background-color: #f9f9f9; cursor: move; display: flex; align-items: center; gap: 10px;">
+                    <span style="cursor: move; user-select: none;">☰</span>
+                    <input type="text" id="task-status-name-${status.id}" value="${escapeHtml(status.name)}" 
+                           style="flex: 1; padding: 5px; border: 1px solid #000000;" 
+                           onblur="updateTaskStatus(${status.id})">
+                    <div style="margin-left: 15px; display: flex; gap: 5px;">
+                        <button class="form-button" onclick="updateTaskStatus(${status.id})" style="padding: 5px 15px; font-size: 12px;">Save</button>
+                        <button class="form-button" onclick="deleteTaskStatus(${status.id})" style="padding: 5px 15px; font-size: 12px; background-color: #dc3545; color: white;">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showTaskStatusSuggestions() {
+            const input = document.getElementById('new-task-status-input');
+            const suggestionsDiv = document.getElementById('task-status-suggestions');
+            const warningDiv = document.getElementById('task-status-duplicate-warning');
+            
+            if (!input || !suggestionsDiv) return;
+            
+            const query = input.value.trim().toLowerCase();
+            
+            if (!query) {
+                suggestionsDiv.classList.add('hidden');
+                warningDiv.style.display = 'none';
+                return;
+            }
+            
+            // Check for duplicates
+            const existingStatuses = taskStatusesCache || [];
+            const isDuplicate = existingStatuses.some(status => 
+                status.name.toLowerCase() === query
+            );
+            
+            if (isDuplicate) {
+                suggestionsDiv.classList.add('hidden');
+                warningDiv.textContent = 'This task status already exists!';
+                warningDiv.style.display = 'block';
+                input.style.borderColor = '#dc3545';
+                return;
+            } else {
+                warningDiv.style.display = 'none';
+                input.style.borderColor = '#000000';
+            }
+            
+            // Show similar suggestions
+            const similar = existingStatuses
+                .filter(status => status.name.toLowerCase().includes(query))
+                .slice(0, 5);
+            
+            if (similar.length === 0) {
+                suggestionsDiv.classList.add('hidden');
+                return;
+            }
+            
+            suggestionsDiv.innerHTML = similar.map(status => 
+                `<div class="country-dropdown-item" onclick="selectTaskStatusSuggestion('${status.name.replace(/'/g, "\\'")}')">${escapeHtml(status.name)}</div>`
+            ).join('');
+            suggestionsDiv.classList.remove('hidden');
+        }
+
+        function hideTaskStatusSuggestions() {
+            const suggestionsDiv = document.getElementById('task-status-suggestions');
+            if (suggestionsDiv) {
+                suggestionsDiv.classList.add('hidden');
+            }
+        }
+
+        function selectTaskStatusSuggestion(name) {
+            const input = document.getElementById('new-task-status-input');
+            if (input) {
+                input.value = name;
+            }
+            hideTaskStatusSuggestions();
+            showTaskStatusSuggestions(); // Re-check for duplicates
+        }
+
+        function addTaskStatus() {
+            const input = document.getElementById('new-task-status-input');
+            const warningDiv = document.getElementById('task-status-duplicate-warning');
+            if (!input) return;
+            
+            const name = input.value.trim();
+            if (!name) {
+                alert('Task status name cannot be empty');
+                return;
+            }
+            
+            // Check for duplicates before submitting
+            const existingStatuses = taskStatusesCache || [];
+            const isDuplicate = existingStatuses.some(status => 
+                status.name.toLowerCase() === name.toLowerCase()
+            );
+            
+            if (isDuplicate) {
+                warningDiv.textContent = 'This task status already exists!';
+                warningDiv.style.display = 'block';
+                input.style.borderColor = '#dc3545';
+                input.focus();
+                return;
+            }
+            
+            fetch('/api/task-statuses', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    if (data.error.includes('already exists')) {
+                        warningDiv.textContent = 'This task status already exists!';
+                        warningDiv.style.display = 'block';
+                        input.style.borderColor = '#dc3545';
+                        input.focus();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } else {
+                    input.value = '';
+                    warningDiv.style.display = 'none';
+                    input.style.borderColor = '#000000';
+                    hideTaskStatusSuggestions();
+                    loadTaskStatuses();
+                }
+            })
+            .catch(error => {
+                alert('Error adding task status: ' + error.message);
+            });
+        }
+
+        function updateTaskStatus(statusId) {
+            const nameInput = document.getElementById(`task-status-name-${statusId}`);
+            const name = nameInput.value.trim();
+            
+            if (!name) {
+                alert('Task status name cannot be empty');
+                loadTaskStatuses(); // Reload to reset
+                return;
+            }
+            
+            // Find current status to preserve display_order
+            const currentStatus = taskStatusesCache.find(s => s.id === statusId);
+            if (!currentStatus) {
+                loadTaskStatuses();
+                return;
+            }
+            
+            fetch(`/api/task-statuses/${statusId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    display_order: currentStatus.display_order || 0
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    loadTaskStatuses(); // Reload to reset
+                } else {
+                    loadTaskStatuses();
+                }
+            })
+            .catch(error => {
+                alert('Error updating task status: ' + error.message);
+                loadTaskStatuses(); // Reload to reset
+            });
+        }
+
+        function deleteTaskStatus(statusId) {
+            if (!confirm('Are you sure you want to delete this task status?')) {
+                return;
+            }
+            
+            fetch(`/api/task-statuses/${statusId}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    loadTaskStatuses();
+                }
+            })
+            .catch(error => {
+                alert('Error deleting task status: ' + error.message);
+            });
+        }
+
+        function handleTaskStatusDrop(event, targetId) {
+            event.preventDefault();
+            if (!currentTaskStatusDragId || currentTaskStatusDragId === targetId) {
+                currentTaskStatusDragId = null;
+                return;
+            }
+            
+            const fromIndex = taskStatusesCache.findIndex(s => s.id === currentTaskStatusDragId);
+            const toIndex = taskStatusesCache.findIndex(s => s.id === targetId);
+            
+            if (fromIndex === -1 || toIndex === -1) {
+                currentTaskStatusDragId = null;
+                return;
+            }
+            
+            // Reorder in memory
+            const sortedStatuses = [...taskStatusesCache].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            const fromIndexSorted = sortedStatuses.findIndex(s => s.id === currentTaskStatusDragId);
+            const toIndexSorted = sortedStatuses.findIndex(s => s.id === targetId);
+            
+            const [moved] = sortedStatuses.splice(fromIndexSorted, 1);
+            sortedStatuses.splice(toIndexSorted, 0, moved);
+            
+            // Re-assign display_order sequentially
+            sortedStatuses.forEach((status, index) => {
+                status.display_order = index + 1;
+            });
+            
+            // Persist all updated orders
+            Promise.all(sortedStatuses.map(status => 
+                fetch(`/api/task-statuses/${status.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: status.name,
+                        display_order: status.display_order
+                    })
+                })
+            ))
+            .then(responses => Promise.all(responses.map(r => r.json())))
+            .then(results => {
+                if (results.some(r => r.error)) {
+                    alert('Error updating order');
+                } else {
+                    loadTaskStatuses();
+                }
+            })
+            .catch(error => {
+                alert('Error reordering task statuses: ' + error.message);
+            })
+            .finally(() => {
+                currentTaskStatusDragId = null;
+            });
         }
     </script>
 </body>

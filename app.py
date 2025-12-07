@@ -316,6 +316,9 @@ def initialize_database():
             cursor.execute("UPDATE tasks SET updated_at = created_at WHERE updated_at IS NULL")
         if 'created_by' not in task_columns:
             cursor.execute("ALTER TABLE tasks ADD COLUMN created_by TEXT")
+        if 'status' not in task_columns:
+            cursor.execute("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'open'")
+            cursor.execute("UPDATE tasks SET status = 'open' WHERE status IS NULL")
         # Update existing records to set created_by
         cursor.execute("UPDATE tasks SET created_by = 'eric.brilliant@gmail.com' WHERE created_by IS NULL")
         # Countries table for dropdown options
@@ -367,6 +370,26 @@ def initialize_database():
             cursor.executemany("""
             INSERT INTO customer_business_types (name, display_order) VALUES (?, ?)
             """, default_business_types)
+        
+        # Task statuses table for dropdown options
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS task_statuses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            display_order INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+        """)
+        # Initialize default task statuses if table is empty
+        cursor.execute("SELECT COUNT(*) as count FROM task_statuses")
+        if cursor.fetchone()['count'] == 0:
+            default_statuses = [
+                ('open', 1),
+                ('close', 2)
+            ]
+            cursor.executemany("""
+            INSERT INTO task_statuses (name, display_order) VALUES (?, ?)
+            """, default_statuses)
         
         # Users/security table for tracking login history
         cursor.execute("""
@@ -1878,6 +1901,7 @@ def export_tasks():
                     t.template,
                     t.attachments,
                     t.deadline,
+                    COALESCE(t.status, 'open') AS status,
                     t.created_at,
                     t.updated_at,
                     t.created_by,
@@ -1907,7 +1931,7 @@ def export_tasks():
         ws.title = "Tasks"
         
         # Headers
-        headers = ['Sequence', 'Business Type', 'Customer', 'Company Name', 'Email', 'Type', 'Template', 'Deadline', 'Created At', 'Created By', 'Source', 'Last Updated', 'Attachments']
+        headers = ['Sequence', 'Business Type', 'Customer', 'Company Name', 'Email', 'Type', 'Template', 'Status', 'Deadline', 'Created At', 'Created By', 'Source', 'Last Updated', 'Attachments']
         ws.append(headers)
         
         # Style headers
@@ -1936,6 +1960,7 @@ def export_tasks():
                 row['email'] or '',
                 row['catalogue'] or '',
                 row['template'] or '',
+                row.get('status', 'open') or 'open',
                 row['deadline'] or '',
                 row['created_at'] or '',
                 row['created_by'] or '',
@@ -2680,6 +2705,7 @@ def handle_tasks():
                         t.template,
                         t.attachments,
                         t.deadline,
+                        COALESCE(t.status, 'open') AS status,
                         t.created_at,
                         t.updated_at,
                         t.created_by,
@@ -2756,6 +2782,11 @@ def handle_tasks():
                 except (KeyError, IndexError):
                     created_by = None
                 
+                try:
+                    status = row['status'] if 'status' in row.keys() else 'open'
+                except (KeyError, IndexError):
+                    status = 'open'
+                
                 tasks.append({
                     'id': row['id'],
                     'sequence': row['sequence'],
@@ -2765,6 +2796,7 @@ def handle_tasks():
                     'template': row['template'],
                     'attachments': attachments,
                     'deadline': row['deadline'],
+                    'status': status,
                     'created_at': row['created_at'],
                     'updated_at': row['updated_at'],
                     'created_by': created_by,
@@ -2808,6 +2840,7 @@ def handle_tasks():
         template = data.get('template', '').strip()
         attachments = data.get('attachments', [])
         deadline = data.get('deadline')
+        status = data.get('status', 'open').strip()  # Default to 'open'
         if isinstance(deadline, str):
             deadline = deadline.strip() or None
         
@@ -2817,6 +2850,27 @@ def handle_tasks():
         if not template:
             return jsonify({'error': 'Template is required'}), 400
         
+        # Validate status exists in database (default to 'open' if not found)
+        try:
+            connection_check = get_db_connection()
+            cursor_check = connection_check.cursor()
+            cursor_check.execute("SELECT name FROM task_statuses WHERE name = ?", (status,))
+            if not cursor_check.fetchone():
+                cursor_check.execute("SELECT name FROM task_statuses WHERE name = 'open'")
+                open_status = cursor_check.fetchone()
+                if open_status:
+                    status = 'open'
+                else:
+                    # If 'open' doesn't exist, get first status
+                    cursor_check.execute("SELECT name FROM task_statuses ORDER BY display_order LIMIT 1")
+                    first_status = cursor_check.fetchone()
+                    status = first_status['name'] if first_status else 'open'
+            cursor_check.close()
+            connection_check.close()
+        except Exception:
+            # If table doesn't exist yet, default to 'open'
+            status = 'open'
+        
         try:
             attachments_json = json.dumps(attachments) if attachments else '[]'
             
@@ -2824,9 +2878,9 @@ def handle_tasks():
             cursor = connection.cursor()
             created_by = session.get('user_email', 'eric.brilliant@gmail.com')
             cursor.execute("""
-                INSERT INTO tasks (sequence, customer, email, catalogue, template, attachments, deadline, created_at, updated_at, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
-            """, (sequence, customer, email, catalogue, template, attachments_json, deadline, created_by))
+                INSERT INTO tasks (sequence, customer, email, catalogue, template, attachments, deadline, status, created_at, updated_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
+            """, (sequence, customer, email, catalogue, template, attachments_json, deadline, status, created_by))
             connection.commit()
             task_id = cursor.lastrowid
             cursor.execute("SELECT created_at, updated_at FROM tasks WHERE id = ?", (task_id,))
@@ -2912,6 +2966,20 @@ def handle_single_task(task_id):
             connection.close()
             return jsonify({'error': 'Task not found or access denied'}), 404
         
+        status = data.get('status', '').strip()
+        # Validate status exists in database if provided
+        if status:
+            try:
+                connection_check = get_db_connection()
+                cursor_check = connection_check.cursor()
+                cursor_check.execute("SELECT name FROM task_statuses WHERE name = ?", (status,))
+                if not cursor_check.fetchone():
+                    status = None  # Don't update if invalid
+                cursor_check.close()
+                connection_check.close()
+            except Exception:
+                status = None  # Don't update if table doesn't exist
+        
         update_fields = [
             ('catalogue', catalogue),
             ('template', template),
@@ -2922,6 +2990,8 @@ def handle_single_task(task_id):
             update_fields.append(('email', email))
         if customer:
             update_fields.append(('customer', customer))
+        if status:
+            update_fields.append(('status', status))
         if attachments_json is not None:
             update_fields.append(('attachments', attachments_json))
         
@@ -3528,6 +3598,120 @@ def handle_customer_business_type(type_id):
                 return jsonify({'status': 'deleted', 'id': type_id})
             else:
                 return jsonify({'error': 'Customer business type not found'}), 404
+        except Exception as exc:
+            return jsonify({'error': f'Database error: {str(exc)}'}), 500
+
+
+@app.route('/api/task-statuses', methods=['GET', 'POST'])
+def handle_task_statuses():
+    """Handle task status retrieval and creation"""
+    if request.method == 'GET':
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            cursor.execute("SELECT id, name, display_order, created_at FROM task_statuses ORDER BY display_order, name")
+            statuses = [dict(row) for row in cursor.fetchall()]
+            cursor.close()
+            connection.close()
+            return jsonify(statuses)
+        except Exception as exc:
+            return jsonify({'error': f'Database error: {str(exc)}'}), 500
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            name = data.get('name', '').strip()
+            if not name:
+                return jsonify({'error': 'Task status name is required'}), 400
+            
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            
+            # Check if name already exists
+            cursor.execute("SELECT id FROM task_statuses WHERE name = ?", (name,))
+            if cursor.fetchone():
+                cursor.close()
+                connection.close()
+                return jsonify({'error': 'Task status with this name already exists'}), 400
+            
+            # Get max display_order
+            cursor.execute("SELECT MAX(display_order) as max_order FROM task_statuses")
+            max_order = cursor.fetchone()['max_order'] or 0
+            display_order = data.get('display_order', max_order + 1)
+            
+            cursor.execute("""
+                INSERT INTO task_statuses (name, display_order) VALUES (?, ?)
+            """, (name, display_order))
+            connection.commit()
+            status_id = cursor.lastrowid
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'id': status_id,
+                'name': name,
+                'display_order': display_order,
+                'status': 'created'
+            }), 201
+        except Exception as exc:
+            return jsonify({'error': f'Database error: {str(exc)}'}), 500
+
+
+@app.route('/api/task-statuses/<int:status_id>', methods=['PUT', 'DELETE'])
+def handle_task_status(status_id):
+    """Handle task status update and deletion"""
+    if request.method == 'PUT':
+        try:
+            data = request.get_json()
+            name = data.get('name', '').strip()
+            if not name:
+                return jsonify({'error': 'Task status name is required'}), 400
+            
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            
+            # Check if name already exists for another status
+            cursor.execute("SELECT id FROM task_statuses WHERE name = ? AND id != ?", (name, status_id))
+            if cursor.fetchone():
+                cursor.close()
+                connection.close()
+                return jsonify({'error': 'Task status with this name already exists'}), 400
+            
+            display_order = data.get('display_order', 0)
+            cursor.execute("""
+                UPDATE task_statuses SET name = ?, display_order = ? WHERE id = ?
+            """, (name, display_order, status_id))
+            connection.commit()
+            updated = cursor.rowcount > 0
+            cursor.close()
+            connection.close()
+            
+            if updated:
+                return jsonify({
+                    'id': status_id,
+                    'name': name,
+                    'display_order': display_order,
+                    'status': 'updated'
+                })
+            else:
+                return jsonify({'error': 'Task status not found'}), 404
+        except Exception as exc:
+            return jsonify({'error': f'Database error: {str(exc)}'}), 500
+    
+    elif request.method == 'DELETE':
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            cursor.execute("DELETE FROM task_statuses WHERE id = ?", (status_id,))
+            connection.commit()
+            deleted = cursor.rowcount > 0
+            cursor.close()
+            connection.close()
+            
+            if deleted:
+                return jsonify({'status': 'deleted', 'id': status_id})
+            else:
+                return jsonify({'error': 'Task status not found'}), 404
         except Exception as exc:
             return jsonify({'error': f'Database error: {str(exc)}'}), 500
 

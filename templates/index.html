@@ -2207,6 +2207,18 @@
         </div>
     </div>
 
+    <div id="view-task-modal" class="modal hidden" onclick="closeViewTaskModal()" role="dialog" aria-modal="true">
+        <div class="modal-dialog" onclick="event.stopPropagation();" style="max-width: 90%; width: 1000px; max-height: 90vh;">
+            <div class="modal-header">
+                <div class="modal-title">Task Details</div>
+                <button class="modal-close" onclick="closeViewTaskModal()">Close</button>
+            </div>
+            <div class="modal-body" style="max-height: calc(90vh - 120px); overflow-y: auto;">
+                <div id="view-task-content"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="history-modal" class="modal hidden" onclick="closeHistoryModal()" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
         <div class="modal-dialog" onclick="event.stopPropagation();" style="max-width: 90%; width: 1200px; max-height: 90vh;">
             <div class="modal-header">
@@ -2276,6 +2288,7 @@
         const editTaskDeadlineInput = document.getElementById('edit-task-deadline');
         const editTaskAttachmentsDiv = document.getElementById('edit-task-attachments');
         const editTaskTemplateEditorDiv = document.getElementById('edit-task-template-editor');
+        const viewTaskModal = document.getElementById('view-task-modal');
         
         // Initialize Quill editor for task modal
         let taskNotesEditor = null;
@@ -6890,6 +6903,65 @@
             return (value || '').replace(/<\/textarea>/gi, '&lt;/textarea&gt;');
         }
 
+        function countWords(text) {
+            if (!text) return 0;
+            // Strip HTML tags and count words
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = text;
+            const plainText = tempDiv.textContent || tempDiv.innerText || '';
+            return plainText.trim().split(/\s+/).filter(word => word.length > 0).length;
+        }
+
+        function truncateTemplate(template, maxWords = 200) {
+            if (!template) return { text: '', isTruncated: false };
+            
+            const wordCount = countWords(template);
+            if (wordCount <= maxWords) {
+                return { text: template, isTruncated: false };
+            }
+            
+            // Create a temporary div to parse HTML and get plain text
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = template;
+            const plainText = tempDiv.textContent || tempDiv.innerText || '';
+            const words = plainText.trim().split(/\s+/).filter(word => word.length > 0);
+            
+            if (words.length <= maxWords) {
+                return { text: template, isTruncated: false };
+            }
+            
+            // Truncate to approximately maxWords
+            // We'll show a preview by taking roughly the right amount of characters
+            // Estimate: average word length is ~5 chars, so maxWords * 6 should be safe
+            const estimatedChars = maxWords * 6;
+            let truncatedHtml = template;
+            
+            // Try to cut at a reasonable point (after a closing tag or space)
+            if (template.length > estimatedChars) {
+                let cutPoint = estimatedChars;
+                // Look for a safe cut point within the next 100 characters
+                for (let i = estimatedChars; i < Math.min(template.length, estimatedChars + 100); i++) {
+                    // Cut after closing tags, spaces, or punctuation
+                    if (template.substring(i, i + 2) === '</' || 
+                        template[i] === '>' || 
+                        (template[i] === ' ' && i > estimatedChars) ||
+                        ['.', '!', '?'].includes(template[i])) {
+                        cutPoint = i + 1;
+                        break;
+                    }
+                }
+                truncatedHtml = template.substring(0, cutPoint);
+                
+                // Make sure we close any open tags (simple approach)
+                // Count open and close tags
+                const openTags = (truncatedHtml.match(/<[^/][^>]*>/g) || []).length;
+                const closeTags = (truncatedHtml.match(/<\/[^>]+>/g) || []).length;
+                // This is a simplified check - in production you might want a more robust solution
+            }
+            
+            return { text: truncatedHtml, isTruncated: true };
+        }
+
         function getTaskTypeOptions(selectedValue) {
             const types = [...(taskTypesCache || [])].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
             const options = types.map(type => {
@@ -6928,6 +7000,12 @@
             ].join(' ');
 
             if (!isEditing) {
+                const template = task.template || '';
+                const { text: truncatedTemplate, isTruncated } = truncateTemplate(template, 50);
+                const templateDisplay = isTruncated 
+                    ? `${truncatedTemplate} <a href="#" onclick="openViewTaskModal(${task.id}); return false;" style="color: #007bff; text-decoration: underline; cursor: pointer;">read more...</a>`
+                    : template;
+                
                 return `
                     <tr ${rowAttributes}>
                         <td>${escapeHtml(task.sequence || '')}</td>
@@ -6936,8 +7014,8 @@
                         <td>${escapeHtml(companyName)}</td>
                         <td>${escapeHtml(task.email || '')}</td>
                         <td>${escapeHtml(task.catalogue || '')}</td>
-                        <td class="task-template-cell" title="${escapeHtml(task.template || '')}">
-                            ${task.template || ''}
+                        <td class="task-template-cell" title="${escapeHtml(template)}">
+                            ${templateDisplay}
                         </td>
                         <td>${escapeHtml(task.status || 'open')}</td>
                         <td>${task.deadline ? escapeHtml(task.deadline) : ''}</td>
@@ -7126,6 +7204,133 @@
             .catch(error => {
                 alert('Error deleting task: ' + error.message);
             });
+        }
+
+        function openViewTaskModal(taskId) {
+            const tasks = window.taskListCache || [];
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) {
+                alert('Task not found');
+                return;
+            }
+
+            const viewTaskModal = document.getElementById('view-task-modal');
+            const viewTaskContent = document.getElementById('view-task-content');
+            if (!viewTaskModal || !viewTaskContent) {
+                alert('View task modal not found');
+                return;
+            }
+
+            const attachments = task.attachments || [];
+            const companyName = task.company_name || '';
+            const source = task.source || '';
+            const businessType = task.business_type || '';
+            const createdAtDisplay = task.created_at ? escapeHtml(new Date(task.created_at).toLocaleString()) : '';
+            const lastUpdatedDisplay = task.updated_at ? escapeHtml(new Date(task.updated_at).toLocaleString()) : '';
+            const deadlineDisplay = task.deadline ? escapeHtml(task.deadline) : 'N/A';
+
+            // Render attachments
+            let attachmentsHtml = '';
+            if (attachments.length > 0) {
+                attachmentsHtml = '<div style="margin-top: 30px;"><strong style="display: block; margin-bottom: 15px; font-size: 16px; color: #333;">Attachments:</strong><div style="margin-top: 15px;">';
+                attachmentsHtml += attachments.map((att, idx) => {
+                    const filename = escapeHtml(att.filename || `attachment-${idx + 1}`);
+                    const contentType = att.content_type || 'application/octet-stream';
+                    const size = formatAttachmentSize(att.size || 0);
+                    const isImage = contentType.startsWith('image/');
+                    const isPDF = contentType === 'application/pdf' || (att.filename && att.filename.toLowerCase().endsWith('.pdf'));
+                    const dataUrl = att.data ? `data:${contentType};base64,${att.data}` : null;
+                    
+                    return `
+                        <div style="margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #ffffff;">
+                            <div style="font-weight: bold; margin-bottom: 8px; font-size: 15px;">${filename}</div>
+                            <div style="font-size: 12px; color: #666; margin-bottom: 12px;">${contentType} • ${size}</div>
+                            <div style="margin-top: 10px;">
+                                ${dataUrl ? `<a href="${dataUrl}" download="${filename}" class="form-button" style="font-size: 12px; margin-right: 8px; display: inline-block; padding: 8px 15px;">Download</a>` : ''}
+                                ${(isImage || isPDF) && dataUrl ? `<button class="form-button" onclick="openTaskListAttachment(${task.id}, ${idx})" style="font-size: 12px; display: inline-block; padding: 8px 15px;">View</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                attachmentsHtml += '</div></div>';
+            }
+
+            viewTaskContent.innerHTML = `
+                <div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; padding: 30px;">
+                    <div style="margin-bottom: 30px;">
+                        <h2 style="margin-bottom: 25px; border-bottom: 2px solid #000; padding-bottom: 15px; font-size: 24px;">Task Information</h2>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Sequence:</strong>
+                                <span>${escapeHtml(task.sequence || 'N/A')}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Status:</strong>
+                                <span>${escapeHtml(task.status || 'open')}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Business Type:</strong>
+                                <span>${escapeHtml(businessType || 'N/A')}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Type:</strong>
+                                <span>${escapeHtml(task.catalogue || 'N/A')}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Customer:</strong>
+                                <span>${escapeHtml(task.customer || 'N/A')}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Company Name:</strong>
+                                <span>${escapeHtml(companyName || 'N/A')}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Email:</strong>
+                                <span>${escapeHtml(task.email || 'N/A')}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Source:</strong>
+                                <span>${escapeHtml(source || 'N/A')}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Deadline:</strong>
+                                <span>${deadlineDisplay}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Created At:</strong>
+                                <span>${createdAtDisplay}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Last Updated:</strong>
+                                <span>${lastUpdatedDisplay}</span>
+                            </div>
+                            <div style="padding: 12px; background-color: #f9f9f9; border-radius: 4px;">
+                                <strong style="display: block; margin-bottom: 5px; color: #333;">Created By:</strong>
+                                <span>${escapeHtml(task.created_by || 'N/A')}</span>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 30px; margin-bottom: 30px;">
+                            <strong style="display: block; margin-bottom: 15px; font-size: 16px; color: #333;">Template/Context:</strong>
+                            <div style="padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; max-height: 500px; overflow-y: auto; line-height: 1.8;">
+                                ${task.template || 'No template content'}
+                            </div>
+                        </div>
+
+                        ${attachmentsHtml}
+                    </div>
+                </div>
+            `;
+
+            viewTaskModal.classList.remove('hidden');
+        }
+
+        function closeViewTaskModal() {
+            const viewTaskModal = document.getElementById('view-task-modal');
+            if (viewTaskModal) {
+                viewTaskModal.classList.add('hidden');
+            }
         }
 
         function renderEditTaskAttachments(attachments) {

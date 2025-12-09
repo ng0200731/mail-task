@@ -266,10 +266,16 @@
 
         .task-attachment-entry {
             display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-bottom: 6px;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 8px;
+            padding: 6px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .task-attachment-entry:hover {
+            background-color: #f5f5f5;
         }
 
         .task-attachment-display {
@@ -372,12 +378,14 @@
         }
 
         .task-attachment-thumb {
-            width: 60px;
-            height: 60px;
+            width: 80px;
+            height: 80px;
             object-fit: cover;
             border: 1px solid #000000;
-            margin-right: 10px;
+            margin-right: 12px;
             background-color: #ffffff;
+            border-radius: 4px;
+            flex-shrink: 0;
         }
 
         .task-type-row {
@@ -7568,17 +7576,27 @@
                 const isPDF = isPDFContent(att.filename, contentType);
                 const isText = isTextContent(att.filename, contentType);
                 const isViewable = Boolean(isImage || isPDF || isText);
-                const thumbHtml = isImage
-                    ? `<img src="data:${contentType};base64,${att.data}" alt="${filename}" class="task-attachment-thumb" onclick="openTaskListAttachment(${task.id}, ${idx})">`
-                    : `<div class="task-attachment-thumb" style="display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;" onclick="openTaskListAttachment(${task.id}, ${idx})">📄</div>`;
-                const downloadLink = `<a class="attachment-download-link" href="data:${contentType};base64,${att.data}" download="${escapeHtml(att.filename || `attachment-${idx + 1}`)}" title="Download">📎</a>`;
+                
+                // For non-image files, show a better icon
+                let thumbHtml;
+                if (isImage) {
+                    thumbHtml = `<img src="data:${contentType};base64,${att.data}" alt="${filename}" class="task-attachment-thumb" onclick="openTaskListAttachment(${task.id}, ${idx})" style="cursor: pointer;">`;
+                } else if (isPDF) {
+                    thumbHtml = `<div class="task-attachment-thumb" style="display:flex;align-items:center;justify-content:center;font-size:32px;cursor:pointer;background-color:#f0f0f0;" onclick="openTaskListAttachment(${task.id}, ${idx})" title="${filename}">📄</div>`;
+                } else {
+                    thumbHtml = `<div class="task-attachment-thumb" style="display:flex;align-items:center;justify-content:center;font-size:32px;cursor:pointer;background-color:#f0f0f0;" onclick="openTaskListAttachment(${task.id}, ${idx})" title="${filename}">📎</div>`;
+                }
+                
+                const downloadLink = `<a class="attachment-download-link" href="data:${contentType};base64,${att.data}" download="${escapeHtml(att.filename || `attachment-${idx + 1}`)}" title="Download ${filename}" style="font-size: 14px; text-decoration: none; color: #0066cc;">📥</a>`;
+                
                 return `
-                    <div class="task-attachment-entry" style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;">
+                    <div class="task-attachment-entry">
                         ${thumbHtml}
-                        <div style="display:flex;flex-direction:column;gap:2px;max-width:140px;">
-                            <span class="attachment-caption-text" style="font-size:11px;cursor:pointer;color:#0066cc;" onclick="openTaskListAttachment(${task.id}, ${idx})">${caption}</span>
-                            <div>
+                        <div style="display:flex;flex-direction:column;justify-content:flex-start;gap:6px;flex:1;min-width:0;">
+                            <span class="attachment-caption-text" style="font-size:12px;cursor:pointer;color:#0066cc;font-weight:500;word-wrap:break-word;line-height:1.4;" onclick="openTaskListAttachment(${task.id}, ${idx})" title="${filename}">${caption}</span>
+                            <div style="display:flex;align-items:center;gap:8px;">
                                 ${downloadLink}
+                                <span style="font-size:10px;color:#666;">${formatAttachmentSize(att.size || 0)}</span>
                             </div>
                         </div>
                     </div>

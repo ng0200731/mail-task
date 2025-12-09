@@ -1148,6 +1148,35 @@
             background-color: #ffffff;
         }
 
+        /* Hide sequence column in task table */
+        .task-table thead th:first-child,
+        .task-table tbody td:first-child {
+            display: none;
+        }
+
+        /* Make action column sticky when scrolling horizontally */
+        .task-table thead th:last-child,
+        .task-table tbody td:last-child {
+            position: sticky;
+            right: 0;
+            background-color: #ffc0cb !important;
+            z-index: 3;
+            box-shadow: -2px 0 4px rgba(0,0,0,0.1);
+            border-left: 3px solid #000000;
+        }
+
+        .task-table thead tr:nth-child(1) th:last-child {
+            background-color: #ffc0cb !important;
+            z-index: 4;
+            border-left: 3px solid #000000;
+        }
+
+        .task-table thead tr:nth-child(2) th:last-child {
+            background-color: #ffc0cb !important;
+            z-index: 4;
+            border-left: 3px solid #000000;
+        }
+
         #customer-remark.empty:before {
             content: attr(data-placeholder);
             color: #999;

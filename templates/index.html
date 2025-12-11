@@ -2109,9 +2109,9 @@
                         <input type="text" id="task-sequence" readonly>
                     </div>
                     <div class="form-group">
-                        <label for="task-customer-select">Selected Customer</label>
+                        <label for="task-customer-select">Selected Customer <span style="color: red;">*</span></label>
                         <div class="autocomplete-wrapper">
-                            <input type="text" id="task-customer-select" class="autocomplete-input" placeholder="Type to search customer..." autocomplete="off">
+                            <input type="text" id="task-customer-select" class="autocomplete-input" placeholder="Type to search customer..." autocomplete="off" required>
                             <div class="autocomplete-dropdown-btn" id="task-customer-dropdown-btn"></div>
                             <div id="task-customer-dropdown" class="autocomplete-dropdown"></div>
                         </div>
@@ -2136,12 +2136,12 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="task-deadline">Deadline</label>
-                        <input type="date" id="task-deadline" style="width: 100%; padding: 8px; border: 1px solid #000000;">
+                        <label for="task-deadline">Deadline <span style="color: red;">*</span></label>
+                        <input type="date" id="task-deadline" style="width: 100%; padding: 8px; border: 1px solid #000000;" required>
                     </div>
                 </div>
                 <div class="form-group" style="flex: 1; display: flex; flex-direction: column;">
-                    <label for="task-extra-info">Extra Information</label>
+                    <label for="task-extra-info">Extra Information <span style="color: #666; font-weight: normal;">(Optional)</span></label>
                     <textarea id="task-extra-info" rows="3" style="width: 100%; padding: 8px; border: 1px solid #000000; font-family: Arial, sans-serif; font-size: 13px; resize: vertical; margin-bottom: 15px;" placeholder="Enter extra information here..."></textarea>
                     <label for="task-notes">Context</label>
                     <div id="task-notes-editor" style="height: 300px; background-color: #ffffff; margin-bottom: 15px;"></div>
@@ -6188,25 +6188,26 @@
             if (taskDeadlineInput) {
                 taskDeadlineInput.value = '';
             }
-            // Set default value after types are loaded
-            setTimeout(() => {
-                if (taskTypesCache && taskTypesCache.length > 0 && taskCatalogueInput) {
-                    taskCatalogueInput.value = taskTypesCache[0].name || '';
-                }
-            }, 100);
+            // Set task type to blank (no default value)
+            if (taskCatalogueInput) {
+                taskCatalogueInput.value = '';
+            }
             
-            // Copy email content to rich text editor
+            // Copy email content to rich text editor with 2 blank lines at the start
             if (taskNotesEditor) {
+                // Create 2 blank lines
+                const blankLines = '<p><br></p><p><br></p>';
                 if (email.html_body) {
-                    // Convert HTML to Quill Delta format and set it
-                    const delta = taskNotesEditor.clipboard.convert(email.html_body);
+                    // Convert HTML to Quill Delta format and prepend 2 blank lines
+                    const delta = taskNotesEditor.clipboard.convert(blankLines + email.html_body);
                     taskNotesEditor.setContents(delta);
                 } else if (email.plain_body) {
-                    // Set plain text content
-                    taskNotesEditor.setText(email.plain_body || '');
+                    // Set plain text content with 2 blank lines at the start
+                    taskNotesEditor.setText('\n\n' + (email.plain_body || ''));
                 } else {
-                    // Clear if no content
-                    taskNotesEditor.setContents([]);
+                    // Set just 2 blank lines
+                    const blankDelta = taskNotesEditor.clipboard.convert(blankLines);
+                    taskNotesEditor.setContents(blankDelta);
                 }
             }
 
@@ -6818,14 +6819,33 @@
             const sequence = taskSequenceInput.value;
             const customerValueInput = document.getElementById('task-customer-value');
             const customerEmailSuffix = customerValueInput ? customerValueInput.value : '';
-            const customer = taskCustomerSelect ? taskCustomerSelect.value : '';
+            const customer = taskCustomerSelect ? taskCustomerSelect.value.trim() : '';
             const email = taskEmailInput.value;
             const status = taskStatusInput ? (taskStatusInput.value || 'open') : 'open';
             const deadline = taskDeadlineInput ? (taskDeadlineInput.value || '').trim() : '';
             
             // Validate required fields
+            if (!customer || customer === '') {
+                alert('Please select a Customer');
+                if (taskCustomerSelect) {
+                    taskCustomerSelect.focus();
+                }
+                return;
+            }
+            
             if (!catalogue || catalogue === '') {
                 alert('Please select a Type');
+                if (taskCatalogueInput) {
+                    taskCatalogueInput.focus();
+                }
+                return;
+            }
+            
+            if (!deadline || deadline === '') {
+                alert('Please select a Deadline');
+                if (taskDeadlineInput) {
+                    taskDeadlineInput.focus();
+                }
                 return;
             }
             

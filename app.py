@@ -25,6 +25,13 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 from io import BytesIO
 
+# Load environment variables from .env file if it exists
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, use system environment variables only
+
 app = Flask(__name__)
 app.config['VERSION'] = '1.0.81'
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -35,8 +42,8 @@ GMAIL_CONFIG = {
     'port': 993,
     'use_ssl': True,
     'use_tls': False,
-    'username': 'eric.brilliant@gmail.com',
-    'password': 'opqx pfna kagb bznr'
+    'username': os.environ.get('GMAIL_USERNAME', ''),
+    'password': os.environ.get('GMAIL_PASSWORD', '')
 }
 
 EMAIL163_CONFIG = {
@@ -44,8 +51,8 @@ EMAIL163_CONFIG = {
     'port': 993,
     'use_ssl': True,
     'use_tls': False,
-    'username': '19902475292@163.com',
-    'password': 'JDy8MigeNmsESZRa'
+    'username': os.environ.get('EMAIL163_USERNAME', ''),
+    'password': os.environ.get('EMAIL163_PASSWORD', '')
 }
 
 LCF_CONFIG = {
@@ -53,8 +60,8 @@ LCF_CONFIG = {
     'port': 993,
     'use_ssl': True,
     'use_tls': False,
-    'username': 'weiwu@fuchanghk.com',
-    'password': 'mrke1903'
+    'username': os.environ.get('LCF_USERNAME', 'weiwu@fuchanghk.com'),
+    'password': os.environ.get('LCF_PASSWORD', '')
 }
 
 QQ_CONFIG = {
@@ -72,10 +79,10 @@ SMTP_PRIMARY_CONFIG = {
     'port': 465,
     'use_ssl': True,
     'use_tls': False,
-    'username': '19902475292@163.com',
-    'password': 'JDy8MigeNmsESZRa',
+    'username': os.environ.get('EMAIL163_USERNAME', ''),
+    'password': os.environ.get('EMAIL163_PASSWORD', ''),
     'sender_name': 'Mail Task',
-    'from_address': '19902475292@163.com'
+    'from_address': os.environ.get('EMAIL163_USERNAME', '')
 }
 
 SMTP_BACKUP_CONFIG = {
@@ -84,10 +91,10 @@ SMTP_BACKUP_CONFIG = {
     'port': 587,
     'use_ssl': False,
     'use_tls': True,
-    'username': 'eric.brilliant@gmail.com',
-    'password': 'opqx pfna kagb bznr',
+    'username': os.environ.get('GMAIL_USERNAME', ''),
+    'password': os.environ.get('GMAIL_PASSWORD', ''),
     'sender_name': 'Mail Task Backup',
-    'from_address': 'eric.brilliant@gmail.com'
+    'from_address': os.environ.get('GMAIL_USERNAME', '')
 }
 
 SMTP_LCF_CONFIG = {
@@ -96,10 +103,10 @@ SMTP_LCF_CONFIG = {
     'port': 994,
     'use_ssl': True,
     'use_tls': False,
-    'username': 'weiwu@fuchanghk.com',
-    'password': 'mrke1903',
+    'username': os.environ.get('LCF_USERNAME', 'weiwu@fuchanghk.com'),
+    'password': os.environ.get('LCF_PASSWORD', ''),
     'sender_name': 'LCF',
-    'from_address': 'weiwu@fuchanghk.com'
+    'from_address': os.environ.get('LCF_USERNAME', 'weiwu@fuchanghk.com')
 }
 
 DEFAULT_SMTP_CONFIGS = [SMTP_LCF_CONFIG, SMTP_PRIMARY_CONFIG, SMTP_BACKUP_CONFIG]
@@ -823,7 +830,21 @@ def decode_mime_words(s):
     decoded_str = ''
     for fragment, encoding in decoded_fragments:
         if isinstance(fragment, bytes):
-            decoded_str += fragment.decode(encoding or 'utf-8', errors='ignore')
+            # Try the specified encoding first
+            enc = encoding or 'utf-8'
+            try:
+                decoded_str += fragment.decode(enc, errors='replace')
+            except (LookupError, UnicodeDecodeError):
+                # Try common encodings if specified encoding fails
+                for fallback_enc in ['utf-8', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
+                    try:
+                        decoded_str += fragment.decode(fallback_enc, errors='replace')
+                        break
+                    except (LookupError, UnicodeDecodeError):
+                        continue
+                else:
+                    # Last resort: ignore errors
+                    decoded_str += fragment.decode('utf-8', errors='ignore')
         else:
             decoded_str += fragment
     return decoded_str
@@ -1371,14 +1392,42 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                                 try:
                                     payload = part.get_payload(decode=True)
                                     if payload:
-                                        body_plain = payload.decode('utf-8', errors='ignore')
+                                        # Get charset from Content-Type header
+                                        charset = part.get_content_charset() or 'utf-8'
+                                        try:
+                                            body_plain = payload.decode(charset, errors='replace')
+                                        except (LookupError, UnicodeDecodeError):
+                                            # Try common encodings if specified charset fails
+                                            for enc in ['utf-8', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
+                                                try:
+                                                    body_plain = payload.decode(enc, errors='replace')
+                                                    break
+                                                except (LookupError, UnicodeDecodeError):
+                                                    continue
+                                            else:
+                                                # Last resort: ignore errors
+                                                body_plain = payload.decode('utf-8', errors='ignore')
                                 except Exception:
                                     pass
                             elif content_type == "text/html" and not body_html:
                                 try:
                                     payload = part.get_payload(decode=True)
                                     if payload:
-                                        body_html = payload.decode('utf-8', errors='ignore')
+                                        # Get charset from Content-Type header
+                                        charset = part.get_content_charset() or 'utf-8'
+                                        try:
+                                            body_html = payload.decode(charset, errors='replace')
+                                        except (LookupError, UnicodeDecodeError):
+                                            # Try common encodings if specified charset fails
+                                            for enc in ['utf-8', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
+                                                try:
+                                                    body_html = payload.decode(enc, errors='replace')
+                                                    break
+                                                except (LookupError, UnicodeDecodeError):
+                                                    continue
+                                            else:
+                                                # Last resort: ignore errors
+                                                body_html = payload.decode('utf-8', errors='ignore')
                                 except Exception:
                                     pass
 
@@ -1410,7 +1459,24 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                     is_attachment = bool(filename)
                     try:
                         payload = msg.get_payload(decode=True)
-                        decoded = payload.decode('utf-8', errors='ignore') if isinstance(payload, bytes) else str(payload)
+                        if isinstance(payload, bytes):
+                            # Get charset from Content-Type header
+                            charset = msg.get_content_charset() or 'utf-8'
+                            try:
+                                decoded = payload.decode(charset, errors='replace')
+                            except (LookupError, UnicodeDecodeError):
+                                # Try common encodings if specified charset fails
+                                for enc in ['utf-8', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
+                                    try:
+                                        decoded = payload.decode(enc, errors='replace')
+                                        break
+                                    except (LookupError, UnicodeDecodeError):
+                                        continue
+                                else:
+                                    # Last resort: ignore errors
+                                    decoded = payload.decode('utf-8', errors='ignore')
+                        else:
+                            decoded = str(payload)
                     except Exception:
                         payload = b''
                         decoded = str(msg.get_payload())

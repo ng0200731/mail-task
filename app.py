@@ -4,6 +4,9 @@ import imaplib
 import email
 from email.header import decode_header
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from datetime import datetime, date, timedelta
 from typing import Optional
 import ssl
@@ -74,27 +77,27 @@ QQ_CONFIG = {
 }
 
 SMTP_PRIMARY_CONFIG = {
-    'name': '163.com SMTP',
+    'name': '163.com SMTP (Backup)',
     'server': 'smtp.163.com',
     'port': 465,
     'use_ssl': True,
     'use_tls': False,
-    'username': os.environ.get('EMAIL163_USERNAME', ''),
-    'password': os.environ.get('EMAIL163_PASSWORD', ''),
+    'username': os.environ.get('EMAIL163_USERNAME', '19902475292@163.com'),
+    'password': os.environ.get('EMAIL163_PASSWORD', 'JDy8MigeNmsESZRa'),
     'sender_name': 'Mail Task',
-    'from_address': os.environ.get('EMAIL163_USERNAME', '')
+    'from_address': os.environ.get('EMAIL163_USERNAME', '19902475292@163.com')
 }
 
 SMTP_BACKUP_CONFIG = {
-    'name': 'Gmail SMTP',
+    'name': 'Gmail SMTP (Main)',
     'server': 'smtp.gmail.com',
     'port': 587,
     'use_ssl': False,
     'use_tls': True,
-    'username': os.environ.get('GMAIL_USERNAME', ''),
-    'password': os.environ.get('GMAIL_PASSWORD', ''),
-    'sender_name': 'Mail Task Backup',
-    'from_address': os.environ.get('GMAIL_USERNAME', '')
+    'username': os.environ.get('GMAIL_USERNAME', 'eric.brilliant@gmail.com'),
+    'password': os.environ.get('GMAIL_PASSWORD', 'opqx pfna kagb bznr'),
+    'sender_name': 'Mail Task',
+    'from_address': os.environ.get('GMAIL_USERNAME', 'eric.brilliant@gmail.com')
 }
 
 SMTP_LCF_CONFIG = {
@@ -884,9 +887,11 @@ def build_smtp_config_list(configs):
     return sanitized
 
 
-def send_email_with_configs(configs, subject, body, recipients, is_html=False, sender_name=None):
+def send_email_with_configs(configs, subject, body, recipients, is_html=False, sender_name=None, attachments=None):
     """Attempt to send email using provided SMTP configs with automatic fallback."""
     attempts = []
+    attachments = attachments or []
+    
     for cfg in configs:
         smtp = None
         try:
@@ -907,12 +912,54 @@ def send_email_with_configs(configs, subject, body, recipients, is_html=False, s
 
             smtp.login(cfg['username'], cfg['password'])
 
-            msg = MIMEText(body or '', 'html' if is_html else 'plain', 'utf-8')
+            # Use MIMEMultipart if there are attachments, otherwise use MIMEText
+            if attachments and len(attachments) > 0:
+                msg = MIMEMultipart()
+            else:
+                msg = MIMEText(body or '', 'html' if is_html else 'plain', 'utf-8')
+            
             from_address = cfg.get('from_address') or cfg['username']
             display_name = sender_name or cfg.get('sender_name') or from_address
             msg['From'] = email.utils.formataddr((display_name, from_address))
             msg['To'] = ', '.join(recipients)
             msg['Subject'] = subject or ''
+            
+            # If multipart, add body as a part
+            if attachments and len(attachments) > 0:
+                # Add YouTube links to body if HTML
+                youtube_links = [att for att in attachments if att.get('type') == 'youtube']
+                email_body = body or ''
+                if youtube_links and is_html:
+                    youtube_html = '<br><br><strong>YouTube Links:</strong><br>'
+                    for yt in youtube_links:
+                        video_id = yt.get('video_id', '')
+                        url = yt.get('url', f'https://www.youtube.com/watch?v={video_id}')
+                        thumbnail = yt.get('thumbnail_url', f'https://img.youtube.com/vi/{video_id}/0.jpg')
+                        youtube_html += f'<a href="{url}" target="_blank"><img src="{thumbnail}" alt="YouTube Video" style="max-width: 200px; margin: 5px;"></a>'
+                    email_body = email_body + youtube_html
+                
+                body_part = MIMEText(email_body, 'html' if is_html else 'plain', 'utf-8')
+                msg.attach(body_part)
+                
+                # Add file attachments
+                for att in attachments:
+                    if att.get('type') == 'file' and att.get('data'):
+                        try:
+                            filename = att.get('filename', 'attachment')
+                            content_type = att.get('content_type', 'application/octet-stream')
+                            file_data = base64.b64decode(att['data'])
+                            
+                            part = MIMEBase('application', 'octet-stream')
+                            part.set_payload(file_data)
+                            encoders.encode_base64(part)
+                            part.add_header(
+                                'Content-Disposition',
+                                f'attachment; filename= {filename}'
+                            )
+                            msg.attach(part)
+                        except Exception as att_exc:
+                            print(f"Error attaching file {att.get('filename', 'unknown')}: {att_exc}")
+                            continue
 
             smtp.sendmail(from_address, recipients, msg.as_string())
             smtp.quit()
@@ -1583,8 +1630,38 @@ def send_verification_code():
     </html>
     '''
     
+    # Try to use configured SMTP configs: Gmail (main) first, then 163.com (backup)
+    configs_to_try = []
+    
+    # First priority: Gmail SMTP (main)
+    if SMTP_BACKUP_CONFIG.get('username') and SMTP_BACKUP_CONFIG.get('password'):
+        configs_to_try.append(SMTP_BACKUP_CONFIG)
+    
+    # Second priority: 163.com SMTP (backup)
+    if SMTP_PRIMARY_CONFIG.get('username') and SMTP_PRIMARY_CONFIG.get('password'):
+        configs_to_try.append(SMTP_PRIMARY_CONFIG)
+    
+    # Third priority: Try LCF if available (from DEFAULT_SMTP_CONFIGS)
+    for config in DEFAULT_SMTP_CONFIGS:
+        if config.get('username') and config.get('password'):
+            # Avoid duplicates - only add if not already in list
+            is_duplicate = any(
+                c.get('server') == config.get('server') and 
+                c.get('username') == config.get('username')
+                for c in configs_to_try
+            )
+            if not is_duplicate:
+                configs_to_try.append(config)
+    
+    # If no configs have credentials, return error
+    if not configs_to_try:
+        return jsonify({
+            'error': 'SMTP server not configured. Please set email credentials in environment variables (.env file).',
+            'details': ['No SMTP credentials available. Required: GMAIL_USERNAME and GMAIL_PASSWORD (main), or EMAIL163_USERNAME and EMAIL163_PASSWORD (backup)']
+        }), 500
+    
     result = send_email_with_configs(
-        [SMTP_PRIMARY_CONFIG],  # Use 163.com SMTP
+        configs_to_try,  # Try Gmail first, then 163.com as backup
         subject,
         body,
         [email],
@@ -2493,13 +2570,16 @@ def send_email():
     if not configs:
         configs = build_smtp_config_list(DEFAULT_SMTP_CONFIGS)
 
+    attachments = data.get('attachments', [])
+    
     result = send_email_with_configs(
         configs,
         data.get('subject', ''),
         data.get('body', ''),
         recipients,
         bool(data.get('is_html')),
-        data.get('sender_name')
+        data.get('sender_name'),
+        attachments
     )
 
     if result.get('success'):

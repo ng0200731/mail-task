@@ -598,6 +598,35 @@
             margin-bottom: 15px;
         }
 
+        .password-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .password-input-wrapper input {
+            flex: 1;
+            padding-right: 40px;
+        }
+
+        .password-toggle-btn {
+            position: absolute;
+            right: 10px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 18px;
+        }
+
+        .password-toggle-btn:hover {
+            color: #000;
+        }
+
         .form-group {
             margin-bottom: 15px;
         }
@@ -771,6 +800,7 @@
             border: 1px solid #000000;
             padding: 20px;
             background-color: #ffffff;
+            position: relative;
         }
 
         .profile-detail-header {
@@ -1386,12 +1416,6 @@
                     <div>Checking for new emails from web page...</div>
                 </div>
             </div>
-            <div class="loading-overlay" id="save-profile-overlay" style="position: fixed;">
-                <div class="loading-overlay-content">
-                    <div class="loading-spinner"></div>
-                    <div>Saving...</div>
-                </div>
-            </div>
             <div class="content-header">
                 <div>
                     <h2 id="content-title">{% if user_level == '2' or user_level == '3' %}Receive Mail{% else %}Create Customer{% endif %}</h2>
@@ -1730,7 +1754,10 @@
                         </div>
                         <div class="form-group">
                             <label for="gmail-password">App Password:</label>
-                            <input type="password" id="gmail-password" placeholder="Enter app password">
+                            <div class="password-input-wrapper">
+                                <input type="password" id="gmail-password" placeholder="Enter app password">
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('gmail-password', this)">👁️</button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label style="display: flex; align-items: center; gap: 10px;">
@@ -1889,7 +1916,10 @@
                         </div>
                         <div class="form-group">
                             <label for="gmail-oauth-client-secret">OAuth Client Secret:</label>
-                            <input type="password" id="gmail-oauth-client-secret" placeholder="GOCSPX-xxxxxxxxxxxxx" style="font-family: monospace; font-size: 12px;" value="">
+                            <div class="password-input-wrapper">
+                                <input type="password" id="gmail-oauth-client-secret" placeholder="GOCSPX-xxxxxxxxxxxxx" style="font-family: monospace; font-size: 12px;" value="">
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('gmail-oauth-client-secret', this)">👁️</button>
+                            </div>
                             <small style="font-size: 11px; color: #666;">Enter your Client Secret from Google Cloud Console (starts with GOCSPX-)</small>
                         </div>
                         <div class="form-group">
@@ -1941,7 +1971,10 @@
                         </div>
                         <div class="form-group">
                             <label for="163-password">Authorization Code:</label>
-                            <input type="password" id="163-password" placeholder="Enter authorization code">
+                            <div class="password-input-wrapper">
+                                <input type="password" id="163-password" placeholder="Enter authorization code">
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('163-password', this)">👁️</button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label style="display: flex; align-items: center; gap: 10px;">
@@ -1973,7 +2006,10 @@
                         </div>
                         <div class="form-group">
                             <label for="lcf-password">Password:</label>
-                            <input type="password" id="lcf-password" placeholder="Enter password">
+                            <div class="password-input-wrapper">
+                                <input type="password" id="lcf-password" placeholder="Enter password">
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('lcf-password', this)">👁️</button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label style="display: flex; align-items: center; gap: 10px;">
@@ -2004,7 +2040,10 @@
                         </div>
                         <div class="form-group">
                             <label for="lcf-smtp-password">SMTP Password:</label>
-                            <input type="password" id="lcf-smtp-password" placeholder="Enter SMTP password">
+                            <div class="password-input-wrapper">
+                                <input type="password" id="lcf-smtp-password" placeholder="Enter SMTP password">
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('lcf-smtp-password', this)">👁️</button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label style="display: flex; align-items: center; gap: 10px;">
@@ -2036,7 +2075,10 @@
                         </div>
                         <div class="form-group">
                             <label for="qq-password">Authorization Code:</label>
-                            <input type="password" id="qq-password" placeholder="Enter authorization code">
+                            <div class="password-input-wrapper">
+                                <input type="password" id="qq-password" placeholder="Enter authorization code">
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('qq-password', this)">👁️</button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label style="display: flex; align-items: center; gap: 10px;">
@@ -2075,7 +2117,10 @@
                         </div>
                         <div class="form-group">
                             <label for="smtp-primary-password">Authorization Code:</label>
-                            <input type="password" id="smtp-primary-password" placeholder="Enter authorization code">
+                            <div class="password-input-wrapper">
+                                <input type="password" id="smtp-primary-password" placeholder="Enter authorization code">
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('smtp-primary-password', this)">👁️</button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label style="display: flex; align-items: center; gap: 10px;">
@@ -2107,7 +2152,10 @@
                         </div>
                         <div class="form-group">
                             <label for="smtp-backup-password">App Password:</label>
-                            <input type="password" id="smtp-backup-password" placeholder="Enter app password">
+                            <div class="password-input-wrapper">
+                                <input type="password" id="smtp-backup-password" placeholder="Enter app password">
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('smtp-backup-password', this)">👁️</button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label style="display: flex; align-items: center; gap: 10px;">
@@ -2126,6 +2174,12 @@
                     <div class="profile-detail-actions">
                         <button class="form-button danger" onclick="deleteCurrentProfile()">Delete Profile</button>
                         <button class="form-button" onclick="saveCurrentProfile()" style="padding: 15px 30px; font-size: 16px;">Save Profile</button>
+                    </div>
+                    <div class="loading-overlay" id="save-profile-overlay">
+                        <div class="loading-overlay-content">
+                            <div class="loading-spinner"></div>
+                            <div>Saving...</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -5168,6 +5222,19 @@
             const overlay = document.getElementById('save-profile-overlay');
             if (overlay) {
                 overlay.classList.remove('active');
+            }
+        }
+
+        function togglePasswordVisibility(inputId, button) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                button.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                button.textContent = '👁️';
             }
         }
 

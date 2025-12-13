@@ -97,6 +97,10 @@
             z-index: 1000;
         }
 
+        .loading-overlay[style*="fixed"] {
+            position: fixed !important;
+        }
+
         .loading-overlay.active {
             display: flex;
         }
@@ -1382,6 +1386,12 @@
                     <div>Checking for new emails from web page...</div>
                 </div>
             </div>
+            <div class="loading-overlay" id="save-profile-overlay" style="position: fixed;">
+                <div class="loading-overlay-content">
+                    <div class="loading-spinner"></div>
+                    <div>Saving...</div>
+                </div>
+            </div>
             <div class="content-header">
                 <div>
                     <h2 id="content-title">{% if user_level == '2' or user_level == '3' %}Receive Mail{% else %}Create Customer{% endif %}</h2>
@@ -1396,6 +1406,7 @@
                 <button class="form-button" onclick="fetchGmailEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch Gmail</button>
                 <button class="form-button" onclick="checkGmailStatus()" style="margin-bottom: 20px; margin-right: 10px; font-size: 12px;">Check Gmail Status</button>
                 <button class="form-button" onclick="fetch163Emails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch 163.com</button>
+                <button class="form-button" onclick="fetchLCFEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch LCF</button>
                 <button class="form-button" onclick="fetchQQEmails()" style="margin-bottom: 20px;">Fetch QQ Email</button>
                 <div id="error-message" class="message hidden"></div>
                 <div id="email-list" class="email-list"></div>
@@ -1561,14 +1572,14 @@
                             <input type="checkbox" id="compose-is-html">
                             <span>Send as HTML</span>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 10px;">
-                            <input type="checkbox" id="use-primary-smtp" checked>
-                            <span>Use Primary SMTP</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 10px;">
-                            <input type="checkbox" id="use-backup-smtp" checked>
-                            <span>Use Backup SMTP</span>
-                        </label>
+                        <div class="form-group" style="margin-top: 10px;">
+                            <label for="smtp-provider-select" style="margin-right: 10px;">Send via:</label>
+                            <select id="smtp-provider-select" style="padding: 5px 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;">
+                                <option value="lcf">LCF</option>
+                                <option value="163">163.com</option>
+                                <option value="gmail">Gmail</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="compose-actions">
                         <button class="form-button" onclick="sendEmail()">Send Email</button>
@@ -1947,6 +1958,69 @@
                     </div>
 
                     <div class="settings-section" style="margin-top: 30px;">
+                        <h3 style="font-family: Arial, sans-serif; font-size: 18px; color: #000000; margin-bottom: 15px; border-bottom: 1px solid #000000; padding-bottom: 10px;">LCF Configuration</h3>
+                        <div class="form-group">
+                            <label for="lcf-imap-server">IMAP Server:</label>
+                            <input type="text" id="lcf-imap-server" placeholder="imap.qiye.163.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="lcf-port">Port:</label>
+                            <input type="number" id="lcf-port" placeholder="993">
+                        </div>
+                        <div class="form-group">
+                            <label for="lcf-username">Username:</label>
+                            <input type="text" id="lcf-username" placeholder="weiwu@fuchanghk.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="lcf-password">Password:</label>
+                            <input type="password" id="lcf-password" placeholder="Enter password">
+                        </div>
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="lcf-use-ssl" checked>
+                                <span>Use SSL</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="lcf-use-tls">
+                                <span>Use TLS</span>
+                            </label>
+                        </div>
+                        <div class="form-group" style="margin-top: 20px; border-top: 1px solid #e0e0e0; padding-top: 15px;">
+                            <strong style="font-family: Arial, sans-serif; font-size: 14px;">LCF SMTP Configuration</strong>
+                        </div>
+                        <div class="form-group">
+                            <label for="lcf-smtp-server">SMTP Server:</label>
+                            <input type="text" id="lcf-smtp-server" placeholder="smtp.qiye.163.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="lcf-smtp-port">SMTP Port:</label>
+                            <input type="number" id="lcf-smtp-port" placeholder="994">
+                        </div>
+                        <div class="form-group">
+                            <label for="lcf-smtp-username">SMTP Username:</label>
+                            <input type="text" id="lcf-smtp-username" placeholder="weiwu@fuchanghk.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="lcf-smtp-password">SMTP Password:</label>
+                            <input type="password" id="lcf-smtp-password" placeholder="Enter SMTP password">
+                        </div>
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="lcf-smtp-use-ssl" checked>
+                                <span>Use SSL</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="lcf-smtp-use-tls">
+                                <span>Use TLS</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-section" style="margin-top: 30px;">
                         <h3 style="font-family: Arial, sans-serif; font-size: 18px; color: #000000; margin-bottom: 15px; border-bottom: 1px solid #000000; padding-bottom: 10px;">QQ Email Configuration</h3>
                         <div class="form-group">
                             <label for="qq-imap-server">IMAP Server:</label>
@@ -2047,6 +2121,7 @@
                                 <span>Use TLS</span>
                             </label>
                         </div>
+
                     </div>
                     <div class="profile-detail-actions">
                         <button class="form-button danger" onclick="deleteCurrentProfile()">Delete Profile</button>
@@ -2524,7 +2599,8 @@
         const PROVIDER_LABELS = {
             gmail: 'Gmail',
             qq: 'QQ',
-            '163': '163.com'
+            '163': '163.com',
+            lcf: 'LCF'
         };
 
         function getTodayKey() {
@@ -2806,7 +2882,7 @@
             if (lastProvider) {
                 candidates.push(lastProvider);
             }
-            ['gmail', 'qq', '163'].forEach((provider) => {
+            ['gmail', 'qq', '163', 'lcf'].forEach((provider) => {
                 if (!candidates.includes(provider)) {
                     candidates.push(provider);
                 }
@@ -2862,6 +2938,14 @@
                     use_ssl: true,
                     use_tls: false
                 },
+                lcf: {
+                    imap_server: 'imap.qiye.163.com',
+                    port: 993,
+                    username: 'weiwu@fuchanghk.com',
+                    password: 'mrke1903',
+                    use_ssl: true,
+                    use_tls: false
+                },
                 qq: {
                     imap_server: 'imap.qq.com',
                     port: 993,
@@ -2887,6 +2971,14 @@
                         password: 'opqx pfna kagb bznr',
                         use_ssl: false,
                         use_tls: true
+                    },
+                    lcf: {
+                        server: 'smtp.qiye.163.com',
+                        port: 994,
+                        username: 'weiwu@fuchanghk.com',
+                        password: 'mrke1903',
+                        use_ssl: true,
+                        use_tls: false
                     }
                 }
             };
@@ -2963,6 +3055,13 @@
             document.getElementById('163-use-ssl').checked = profile.email163?.use_ssl ?? true;
             document.getElementById('163-use-tls').checked = profile.email163?.use_tls ?? false;
 
+            document.getElementById('lcf-imap-server').value = profile.lcf?.imap_server || '';
+            document.getElementById('lcf-port').value = profile.lcf?.port || 993;
+            document.getElementById('lcf-username').value = profile.lcf?.username || '';
+            document.getElementById('lcf-password').value = profile.lcf?.password || '';
+            document.getElementById('lcf-use-ssl').checked = profile.lcf?.use_ssl ?? true;
+            document.getElementById('lcf-use-tls').checked = profile.lcf?.use_tls ?? false;
+
             document.getElementById('qq-imap-server').value = profile.qq?.imap_server || '';
             document.getElementById('qq-port').value = profile.qq?.port || 993;
             document.getElementById('qq-username').value = profile.qq?.username || '';
@@ -2990,12 +3089,23 @@
             document.getElementById('smtp-backup-use-ssl').checked = backupSmtp.use_ssl ?? false;
             document.getElementById('smtp-backup-use-tls').checked = backupSmtp.use_tls ?? true;
 
+            const lcfSmtp = smtp.lcf || {};
+            document.getElementById('lcf-smtp-server').value = lcfSmtp.server || '';
+            document.getElementById('lcf-smtp-port').value = lcfSmtp.port || 994;
+            document.getElementById('lcf-smtp-username').value = lcfSmtp.username || '';
+            document.getElementById('lcf-smtp-password').value = lcfSmtp.password || '';
+            document.getElementById('lcf-smtp-use-ssl').checked = lcfSmtp.use_ssl ?? true;
+            document.getElementById('lcf-smtp-use-tls').checked = lcfSmtp.use_tls ?? false;
+
             document.getElementById('profile-list-view').classList.add('hidden');
             document.getElementById('profile-detail-view').classList.remove('hidden');
         }
 
         // Save current profile
         function saveCurrentProfile() {
+            // Show saving overlay
+            showSaveProfileOverlay();
+            
             const profileKey = currentProfileKey || (localStorage.getItem('selectedProfile') || 'profile1');
             const profiles = JSON.parse(localStorage.getItem('emailProfiles') || '{}');
             
@@ -3025,6 +3135,16 @@
                 use_ssl: document.getElementById('163-use-ssl').checked,
                 use_tls: document.getElementById('163-use-tls').checked
             };
+
+            // Save LCF settings
+            profiles[profileKey].lcf = {
+                imap_server: document.getElementById('lcf-imap-server').value.trim(),
+                port: parseInt(document.getElementById('lcf-port').value) || 993,
+                username: document.getElementById('lcf-username').value.trim(),
+                password: document.getElementById('lcf-password').value.trim(),
+                use_ssl: document.getElementById('lcf-use-ssl').checked,
+                use_tls: document.getElementById('lcf-use-tls').checked
+            };
             
             // Save QQ settings
             profiles[profileKey].qq = {
@@ -3053,13 +3173,26 @@
                     password: document.getElementById('smtp-backup-password').value.trim(),
                     use_ssl: document.getElementById('smtp-backup-use-ssl').checked,
                     use_tls: document.getElementById('smtp-backup-use-tls').checked
+                },
+                lcf: {
+                    server: document.getElementById('lcf-smtp-server').value.trim(),
+                    port: parseInt(document.getElementById('lcf-smtp-port').value) || 994,
+                    username: document.getElementById('lcf-smtp-username').value.trim(),
+                    password: document.getElementById('lcf-smtp-password').value.trim(),
+                    use_ssl: document.getElementById('lcf-smtp-use-ssl').checked,
+                    use_tls: document.getElementById('lcf-smtp-use-tls').checked
                 }
             };
             
             localStorage.setItem('emailProfiles', JSON.stringify(profiles));
-            showError('Profile saved successfully', false);
-            renderProfileList();
-            updateComposeDefaults();
+            
+            // Small delay to ensure overlay is visible, then hide it
+            setTimeout(() => {
+                hideSaveProfileOverlay();
+                showError('Profile saved successfully', false);
+                renderProfileList();
+                updateComposeDefaults();
+            }, 300);
         }
 
         // Create new profile
@@ -3427,7 +3560,7 @@
                             <div class="form-group" style="flex: 1; min-width: 200px;">
                                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Selected Customer</label>
                                 <div class="autocomplete-wrapper">
-                                    <input type="text" id="task-form-customer" class="autocomplete-input" placeholder="Type to search customer..." autocomplete="off" required>
+                                    <input type="text" id="task-form-customer" class="autocomplete-input" placeholder="Type to search customer..." autocomplete="off" required disabled readonly style="background-color: #f5f5f5; color: #666; cursor: not-allowed;">
                                     <div class="autocomplete-dropdown-btn" id="task-form-customer-dropdown-btn"></div>
                                     <div id="task-form-customer-dropdown" class="autocomplete-dropdown"></div>
                                 </div>
@@ -3435,7 +3568,7 @@
                             </div>
                             <div class="form-group" style="flex: 1; min-width: 200px;">
                                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Email</label>
-                                <input type="email" id="task-form-email" required style="width: 100%; padding: 8px; border: 1px solid #000000;" placeholder="customer@example.com">
+                                <input type="email" id="task-form-email" required disabled readonly style="width: 100%; padding: 8px; border: 1px solid #000000; background-color: #f5f5f5; color: #666; cursor: not-allowed;" placeholder="customer@example.com">
                             </div>
                         </div>
                         <div class="task-row" style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
@@ -5024,6 +5157,20 @@
             }
         }
 
+        function showSaveProfileOverlay() {
+            const overlay = document.getElementById('save-profile-overlay');
+            if (overlay) {
+                overlay.classList.add('active');
+            }
+        }
+
+        function hideSaveProfileOverlay() {
+            const overlay = document.getElementById('save-profile-overlay');
+            if (overlay) {
+                overlay.classList.remove('active');
+            }
+        }
+
         function getCurrentProfile() {
             // Get selected profile from localStorage or default to profile1
             const selectedProfile = localStorage.getItem('selectedProfile') || 'profile1';
@@ -5380,6 +5527,61 @@
                 });
         }
 
+        function fetchLCFEmails() {
+            const profile = getCurrentProfile();
+            const lcf = profile.lcf || {};
+            
+            if (!lcf.username || !lcf.password) {
+                showError('Please save LCF settings first in Settings page');
+                return;
+            }
+
+            // Show loading overlay
+            showEmailLoadingOverlay();
+
+            const emailList = document.getElementById('email-list');
+            emailList.innerHTML = '<div class="loading">Loading LCF emails...</div>';
+            const cached = loadCachedEmails('lcf');
+            if (cached && Array.isArray(cached)) {
+                const uniqueCached = deduplicateEmails(cached);
+                displayEmails(uniqueCached, { provider: 'lcf', cached: true });
+            }
+
+            const requestData = {
+                limit: 50,
+                imap_server: lcf.imap_server || 'imap.qiye.163.com',
+                port: lcf.port || 993,
+                username: lcf.username || 'weiwu@fuchanghk.com',
+                password: lcf.password || 'mrke1903',
+                use_ssl: lcf.use_ssl !== undefined ? lcf.use_ssl : true,
+                use_tls: lcf.use_tls || false
+            };
+
+            fetch('/api/fetch-lcf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
+                    } else {
+                        const list = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
+                        const uniqueList = deduplicateEmails(list);
+                        cacheEmails('lcf', uniqueList);
+                        displayEmails(uniqueList, { provider: 'lcf' });
+                    }
+                    hideEmailLoadingOverlay();
+                })
+                .catch(error => {
+                    emailList.innerHTML = `<div class="message error">Error fetching emails: ${escapeHtml(error.message)}</div>`;
+                    hideEmailLoadingOverlay();
+                });
+        }
+
         function fetch163Emails() {
             // Show loading overlay
             showEmailLoadingOverlay();
@@ -5458,8 +5660,7 @@
             const bodyValue = document.getElementById('compose-body').value;
             const senderNameInput = document.getElementById('compose-sender-name').value.trim();
             const sendAsHtml = document.getElementById('compose-is-html').checked;
-            const usePrimary = document.getElementById('use-primary-smtp').checked;
-            const useBackup = document.getElementById('use-backup-smtp').checked;
+            const selectedProvider = document.getElementById('smtp-provider-select').value;
 
             const recipients = parseEmailList(recipientsValue);
             if (recipients.length === 0) {
@@ -5476,34 +5677,66 @@
             const smtpConfig = profile.smtp || {};
             const configs = [];
 
-            const primary = smtpConfig.primary || {};
-            if (usePrimary && primary.server && primary.username && primary.password) {
-                configs.push({
-                    name: 'Primary SMTP',
-                    server: primary.server,
-                    port: primary.port,
-                    username: primary.username,
-                    password: primary.password,
-                    use_ssl: !!primary.use_ssl,
-                    use_tls: !!primary.use_tls,
-                    sender_name: smtpConfig.sender_name,
-                    from_address: primary.username
-                });
+            // Based on dropdown selection, add the corresponding SMTP config
+            if (selectedProvider === 'lcf') {
+                const lcf = smtpConfig.lcf || {};
+                if (lcf.server && lcf.username && lcf.password && lcf.port) {
+                    configs.push({
+                        name: 'LCF SMTP',
+                        server: lcf.server,
+                        port: parseInt(lcf.port) || 994,
+                        username: lcf.username,
+                        password: lcf.password,
+                        use_ssl: !!lcf.use_ssl,
+                        use_tls: !!lcf.use_tls,
+                        sender_name: smtpConfig.sender_name,
+                        from_address: lcf.username
+                    });
+                } else {
+                    showSendStatus('LCF SMTP not fully configured. Please check Server, Port, Username, and Password in Settings.', 'error');
+                    return;
+                }
+            } else if (selectedProvider === '163') {
+                const primary = smtpConfig.primary || {};
+                if (primary.server && primary.username && primary.password && primary.port) {
+                    configs.push({
+                        name: '163.com SMTP',
+                        server: primary.server,
+                        port: parseInt(primary.port) || 465,
+                        username: primary.username,
+                        password: primary.password,
+                        use_ssl: !!primary.use_ssl,
+                        use_tls: !!primary.use_tls,
+                        sender_name: smtpConfig.sender_name,
+                        from_address: primary.username
+                    });
+                } else {
+                    showSendStatus('163.com SMTP not fully configured. Please check Server, Port, Username, and Password in Settings.', 'error');
+                    return;
+                }
+            } else if (selectedProvider === 'gmail') {
+                const backup = smtpConfig.backup || {};
+                if (backup.server && backup.username && backup.password && backup.port) {
+                    configs.push({
+                        name: 'Gmail SMTP',
+                        server: backup.server,
+                        port: parseInt(backup.port) || 587,
+                        username: backup.username,
+                        password: backup.password,
+                        use_ssl: !!backup.use_ssl,
+                        use_tls: !!backup.use_tls,
+                        sender_name: smtpConfig.sender_name,
+                        from_address: backup.username
+                    });
+                } else {
+                    showSendStatus('Gmail SMTP not fully configured. Please check Server, Port, Username, and Password in Settings.', 'error');
+                    return;
+                }
             }
 
-            const backup = smtpConfig.backup || {};
-            if (useBackup && backup.server && backup.username && backup.password) {
-                configs.push({
-                    name: 'Backup SMTP',
-                    server: backup.server,
-                    port: backup.port,
-                    username: backup.username,
-                    password: backup.password,
-                    use_ssl: !!backup.use_ssl,
-                    use_tls: !!backup.use_tls,
-                    sender_name: smtpConfig.sender_name,
-                    from_address: backup.username
-                });
+            if (configs.length === 0) {
+                showSendStatus('No SMTP configuration selected or available.', 'error');
+                return;
             }
 
             const payload = {
@@ -5530,10 +5763,18 @@
                 .then(async response => {
                     const data = await response.json();
                     if (!response.ok) {
-                        throw new Error(data.error || 'Failed to send email');
+                        let errorMsg = data.error || 'Failed to send email';
+                        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+                            const detailMessages = data.details.map(d => {
+                                if (typeof d === 'string') return d;
+                                return `${d.provider || 'SMTP'}: ${d.error || 'Unknown error'}`;
+                            }).join('; ');
+                            errorMsg += ' - ' + detailMessages;
+                        }
+                        throw new Error(errorMsg);
                     }
                     document.getElementById('compose-body').value = '';
-                    showSendStatus(`Email sent via ${data.provider || 'SMTP provider'}.`, 'success');
+                    showSendStatus(`Email sent via ${data.provider || data.status || 'SMTP provider'}.`, 'success');
                 })
                 .catch(error => {
                     showSendStatus(`Send failed: ${error.message}`, 'error');
@@ -6253,7 +6494,33 @@
                 }
             }
 
+            // Enable customer and email fields for receive mail (not follow-up)
+            if (taskCustomerSelect) {
+                taskCustomerSelect.disabled = false;
+                taskCustomerSelect.readOnly = false;
+                taskCustomerSelect.style.backgroundColor = '';
+                taskCustomerSelect.style.color = '';
+                taskCustomerSelect.style.cursor = '';
+            }
+            if (taskEmailInput) {
+                taskEmailInput.disabled = false;
+                taskEmailInput.readOnly = false;
+                taskEmailInput.style.backgroundColor = '';
+                taskEmailInput.style.color = '';
+                taskEmailInput.style.cursor = '';
+            }
+
             taskModal.classList.remove('hidden');
+            
+            // Scroll modal to top
+            const modalDialog = taskModal.querySelector('.modal-dialog');
+            if (modalDialog) {
+                modalDialog.scrollTop = 0;
+            }
+            const modalBody = taskModal.querySelector('.task-modal-body');
+            if (modalBody) {
+                modalBody.scrollTop = 0;
+            }
             
             // Populate email details after modal is shown - use multiple retries with increasing delays
             const showEmailDetails = () => {
@@ -6535,8 +6802,34 @@
                 emailDetailsDiv.style.display = 'none';
             }
 
+            // Disable customer and email fields for follow-up (dimmed, cannot change)
+            if (taskCustomerSelect) {
+                taskCustomerSelect.disabled = true;
+                taskCustomerSelect.readOnly = true;
+                taskCustomerSelect.style.backgroundColor = '#f5f5f5';
+                taskCustomerSelect.style.color = '#666';
+                taskCustomerSelect.style.cursor = 'not-allowed';
+            }
+            if (taskEmailInput) {
+                taskEmailInput.disabled = true;
+                taskEmailInput.readOnly = true;
+                taskEmailInput.style.backgroundColor = '#f5f5f5';
+                taskEmailInput.style.color = '#666';
+                taskEmailInput.style.cursor = 'not-allowed';
+            }
+
             // Open modal
             taskModal.classList.remove('hidden');
+            
+            // Scroll modal to top
+            const modalDialog = taskModal.querySelector('.modal-dialog');
+            if (modalDialog) {
+                modalDialog.scrollTop = 0;
+            }
+            const modalBody = taskModal.querySelector('.task-modal-body');
+            if (modalBody) {
+                modalBody.scrollTop = 0;
+            }
         }
 
         function closeTaskModal() {
@@ -6561,6 +6854,22 @@
             const followUpFileInput = document.getElementById('follow-up-attachment-file-input');
             if (followUpFileInput) {
                 followUpFileInput.value = '';
+            }
+            
+            // Re-enable customer and email fields (reset for next use)
+            if (taskCustomerSelect) {
+                taskCustomerSelect.disabled = false;
+                taskCustomerSelect.readOnly = false;
+                taskCustomerSelect.style.backgroundColor = '';
+                taskCustomerSelect.style.color = '';
+                taskCustomerSelect.style.cursor = '';
+            }
+            if (taskEmailInput) {
+                taskEmailInput.disabled = false;
+                taskEmailInput.readOnly = false;
+                taskEmailInput.style.backgroundColor = '';
+                taskEmailInput.style.color = '';
+                taskEmailInput.style.cursor = '';
             }
             
             // Remove global paste handler

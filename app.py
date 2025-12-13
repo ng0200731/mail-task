@@ -48,6 +48,15 @@ EMAIL163_CONFIG = {
     'password': 'JDy8MigeNmsESZRa'
 }
 
+LCF_CONFIG = {
+    'imap_server': 'imap.qiye.163.com',
+    'port': 993,
+    'use_ssl': True,
+    'use_tls': False,
+    'username': 'weiwu@fuchanghk.com',
+    'password': 'mrke1903'
+}
+
 QQ_CONFIG = {
     'imap_server': 'imap.qq.com',
     'port': 993,
@@ -81,7 +90,19 @@ SMTP_BACKUP_CONFIG = {
     'from_address': 'eric.brilliant@gmail.com'
 }
 
-DEFAULT_SMTP_CONFIGS = [SMTP_PRIMARY_CONFIG, SMTP_BACKUP_CONFIG]
+SMTP_LCF_CONFIG = {
+    'name': 'LCF SMTP',
+    'server': 'smtp.qiye.163.com',
+    'port': 994,
+    'use_ssl': True,
+    'use_tls': False,
+    'username': 'weiwu@fuchanghk.com',
+    'password': 'mrke1903',
+    'sender_name': 'LCF',
+    'from_address': 'weiwu@fuchanghk.com'
+}
+
+DEFAULT_SMTP_CONFIGS = [SMTP_LCF_CONFIG, SMTP_PRIMARY_CONFIG, SMTP_BACKUP_CONFIG]
 CUSTOMER_DB_PATH = Path(__file__).resolve().parent / 'mailtask.db'
 
 # Gmail API OAuth 2.0 Configuration
@@ -849,11 +870,19 @@ def send_email_with_configs(configs, subject, body, recipients, is_html=False, s
         smtp = None
         try:
             if cfg.get('use_ssl'):
-                smtp = smtplib.SMTP_SSL(cfg['server'], cfg['port'], timeout=cfg.get('timeout', 10))
+                # Create SSL context that doesn't verify certificates (some enterprise servers need this)
+                context = ssl.create_default_context()
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                smtp = smtplib.SMTP_SSL(cfg['server'], cfg['port'], timeout=cfg.get('timeout', 10), context=context)
             else:
                 smtp = smtplib.SMTP(cfg['server'], cfg['port'], timeout=cfg.get('timeout', 10))
                 if cfg.get('use_tls'):
-                    smtp.starttls()
+                    # Create SSL context for STARTTLS
+                    context = ssl.create_default_context()
+                    context.check_hostname = False
+                    context.verify_mode = ssl.CERT_NONE
+                    smtp.starttls(context=context)
 
             smtp.login(cfg['username'], cfg['password'])
 
@@ -867,8 +896,25 @@ def send_email_with_configs(configs, subject, body, recipients, is_html=False, s
             smtp.sendmail(from_address, recipients, msg.as_string())
             smtp.quit()
             return {'success': True, 'provider': cfg.get('name', cfg['server'])}
+        except smtplib.SMTPAuthenticationError as exc:
+            error_msg = f'Authentication failed: {str(exc)}'
+            attempts.append({'provider': cfg.get('name', cfg['server']), 'error': error_msg})
+            if smtp:
+                try:
+                    smtp.quit()
+                except Exception:
+                    pass
+        except smtplib.SMTPServerDisconnected as exc:
+            error_msg = f'Server disconnected: {str(exc)}. Check server, port, and SSL/TLS settings.'
+            attempts.append({'provider': cfg.get('name', cfg['server']), 'error': error_msg})
+            if smtp:
+                try:
+                    smtp.quit()
+                except Exception:
+                    pass
         except Exception as exc:
-            attempts.append({'provider': cfg.get('name', cfg['server']), 'error': str(exc)})
+            error_msg = f'{type(exc).__name__}: {str(exc)}'
+            attempts.append({'provider': cfg.get('name', cfg['server']), 'error': error_msg})
             if smtp:
                 try:
                     smtp.quit()
@@ -2279,6 +2325,42 @@ def fetch_qq():
         save_emails('qq', result.get('emails', []))
     except Exception as exc:
         print(f"Error saving QQ emails: {exc}")
+    return jsonify(result)
+
+
+@app.route('/api/fetch-lcf', methods=['POST'])
+def fetch_lcf():
+    """Fetch emails from LCF account - requires level 2+"""
+    has_access, error_response, status_code = check_user_level(2)
+    if not has_access:
+        return error_response, status_code
+
+    data = request.json or {}
+    limit = data.get('limit', 50)
+
+    config = {
+        'imap_server': data.get('imap_server', LCF_CONFIG['imap_server']),
+        'port': data.get('port', LCF_CONFIG['port']),
+        'username': data.get('username', LCF_CONFIG['username']),
+        'password': data.get('password', LCF_CONFIG['password']),
+        'use_ssl': data.get('use_ssl', LCF_CONFIG.get('use_ssl', True)),
+        'use_tls': data.get('use_tls', LCF_CONFIG.get('use_tls', False))
+    }
+
+    result = fetch_emails(
+        config['imap_server'],
+        config['port'],
+        config['username'],
+        config['password'],
+        config['use_ssl'],
+        config['use_tls'],
+        limit,
+        days_back=1
+    )
+    try:
+        save_emails('lcf', result.get('emails', []))
+    except Exception as exc:
+        print(f"Error saving LCF emails: {exc}")
     return jsonify(result)
 
 

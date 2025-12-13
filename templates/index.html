@@ -7719,11 +7719,6 @@
         function truncateTemplate(template, maxWords = 200) {
             if (!template) return { text: '', isTruncated: false };
             
-            const wordCount = countWords(template);
-            if (wordCount <= maxWords) {
-                return { text: template, isTruncated: false };
-            }
-            
             // Create a temporary div to parse HTML and get plain text
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = template;
@@ -7734,34 +7729,50 @@
                 return { text: template, isTruncated: false };
             }
             
-            // Truncate to approximately maxWords
-            // We'll show a preview by taking roughly the right amount of characters
-            // Estimate: average word length is ~5 chars, so maxWords * 6 should be safe
-            const estimatedChars = maxWords * 6;
-            let truncatedHtml = template;
-            
-            // Try to cut at a reasonable point (after a closing tag or space)
-            if (template.length > estimatedChars) {
-                let cutPoint = estimatedChars;
-                // Look for a safe cut point within the next 100 characters
-                for (let i = estimatedChars; i < Math.min(template.length, estimatedChars + 100); i++) {
-                    // Cut after closing tags, spaces, or punctuation
-                    if (template.substring(i, i + 2) === '</' || 
-                        template[i] === '>' || 
-                        (template[i] === ' ' && i > estimatedChars) ||
-                        ['.', '!', '?'].includes(template[i])) {
-                        cutPoint = i + 1;
-                        break;
-                    }
+            // Truncate HTML properly by walking the DOM tree
+            function truncateNode(node, remainingWords) {
+                if (remainingWords <= 0) {
+                    return { node: null, wordsUsed: 0 };
                 }
-                truncatedHtml = template.substring(0, cutPoint);
                 
-                // Make sure we close any open tags (simple approach)
-                // Count open and close tags
-                const openTags = (truncatedHtml.match(/<[^/][^>]*>/g) || []).length;
-                const closeTags = (truncatedHtml.match(/<\/[^>]+>/g) || []).length;
-                // This is a simplified check - in production you might want a more robust solution
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const text = node.textContent || '';
+                    const nodeWords = text.trim().split(/\s+/).filter(w => w.length > 0);
+                    
+                    if (nodeWords.length <= remainingWords) {
+                        return { node: node.cloneNode(true), wordsUsed: nodeWords.length };
+                    } else {
+                        // Truncate this text node
+                        const truncatedWords = nodeWords.slice(0, remainingWords);
+                        const truncatedText = truncatedWords.join(' ') + '...';
+                        const newTextNode = document.createTextNode(truncatedText);
+                        return { node: newTextNode, wordsUsed: remainingWords };
+                    }
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    const clonedNode = node.cloneNode(false); // Clone without children
+                    let wordsUsed = 0;
+                    
+                    for (let child of Array.from(node.childNodes)) {
+                        if (wordsUsed >= remainingWords) break;
+                        
+                        const result = truncateNode(child, remainingWords - wordsUsed);
+                        if (result.node) {
+                            clonedNode.appendChild(result.node);
+                            wordsUsed += result.wordsUsed;
+                        }
+                        
+                        if (wordsUsed >= remainingWords) break;
+                    }
+                    
+                    return { node: clonedNode, wordsUsed: wordsUsed };
+                } else {
+                    // For other node types, just clone
+                    return { node: node.cloneNode(true), wordsUsed: 0 };
+                }
             }
+            
+            const result = truncateNode(tempDiv, maxWords);
+            const truncatedHtml = result.node ? result.node.innerHTML : '';
             
             return { text: truncatedHtml, isTruncated: true };
         }

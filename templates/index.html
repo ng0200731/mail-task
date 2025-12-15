@@ -5680,11 +5680,6 @@
         function fetchLCFEmails() {
             const profile = getCurrentProfile();
             const lcf = profile.lcf || {};
-            
-            if (!lcf.username || !lcf.password) {
-                showError('Please save LCF settings first in Settings page');
-                return;
-            }
 
             // Show loading overlay
             showEmailLoadingOverlay();
@@ -5697,15 +5692,24 @@
                 displayEmails(uniqueCached, { provider: 'lcf', cached: true });
             }
 
+            // Build request data. If username/password are not provided in Settings,
+            // backend will fall back to server-side LCF configuration (.env).
             const requestData = {
                 limit: 50,
                 imap_server: lcf.imap_server || 'imap.qiye.163.com',
                 port: lcf.port || 993,
-                username: lcf.username || 'weiwu@fuchanghk.com',
-                password: lcf.password || '',
                 use_ssl: lcf.use_ssl !== undefined ? lcf.use_ssl : true,
                 use_tls: lcf.use_tls || false
             };
+
+            // Only send explicit credentials if user saved them in Settings.
+            // Otherwise, let the backend use environment (.env) defaults.
+            if (lcf.username && lcf.username.trim() !== '') {
+                requestData.username = lcf.username.trim();
+            }
+            if (lcf.password && lcf.password.trim() !== '') {
+                requestData.password = lcf.password.trim();
+            }
 
             fetch('/api/fetch-lcf', {
                 method: 'POST',
@@ -6332,6 +6336,7 @@
             emailModalMeta.textContent = metaLines.join('\n');
 
             if (email.html_body) {
+                const inlineHtml = inlineCidImages(email.html_body, email.attachments || []);
                 // Wrap HTML content with proper styling for scrolling
                 emailModalFrame.srcdoc = `
                     <!DOCTYPE html>
@@ -6349,7 +6354,7 @@
                         </style>
                     </head>
                     <body>
-                        ${email.html_body}
+                        ${inlineHtml}
                     </body>
                     </html>
                 `;
@@ -6893,8 +6898,9 @@
                 // Create 2 blank lines
                 const blankLines = '<p><br></p><p><br></p>';
                 if (email.html_body) {
-                    // Convert HTML to Quill Delta format and prepend 2 blank lines
-                    const delta = taskNotesEditor.clipboard.convert(blankLines + email.html_body);
+                    // Inline cid: images using attachments, then convert HTML to Quill Delta format
+                    const inlineHtml = inlineCidImages(email.html_body, email.attachments || []);
+                    const delta = taskNotesEditor.clipboard.convert(blankLines + inlineHtml);
                     taskNotesEditor.setContents(delta);
                 } else if (email.plain_body) {
                     // Set plain text content with 2 blank lines at the start
@@ -10758,6 +10764,27 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function inlineCidImages(html, attachments = []) {
+            if (!html || !Array.isArray(attachments) || attachments.length === 0) {
+                return html;
+            }
+            const cidMap = {};
+            attachments.forEach(att => {
+                if (!att || !att.data) return;
+                const cid = (att.content_id || '').toString().replace(/[<>]/g, '').trim().toLowerCase();
+                if (!cid) return;
+                const contentType = att.content_type || 'application/octet-stream';
+                cidMap[cid] = `data:${contentType};base64,${att.data}`;
+            });
+            if (Object.keys(cidMap).length === 0) {
+                return html;
+            }
+            return html.replace(/src\s*=\s*["']cid:([^"']+)["']/gi, (match, cid) => {
+                const cleanCid = (cid || '').toString().replace(/[<>]/g, '').trim().toLowerCase();
+                return cidMap[cleanCid] ? `src="${cidMap[cleanCid]}"` : match;
+            });
         }
 
         function exportCustomers() {

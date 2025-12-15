@@ -1354,7 +1354,23 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
     allowed_dates = {today - timedelta(days=offset) for offset in range(lookback_days + 1)}
 
     def _imap_date(d: date) -> str:
-        return d.strftime('%d-%b-%Y')
+        """
+        Format date in the fixed English month format required by IMAP
+        servers, independent of OS locale. Using strftime('%d-%b-%Y')
+        can produce non-English month names on some systems (e.g. Chinese
+        locale on Windows), which causes IMAP errors like b'ERR.PARAM'.
+        """
+        month_abbr = [
+            "",  # 1-based index
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        ]
+        return f"{d.day:02d}-{month_abbr[d.month]}-{d.year}"
+
+    def _clean_content_id(raw: Optional[str]) -> str:
+        if not raw:
+            return ''
+        return raw.strip().strip('<>').strip()
     try:
         # Create SSL context
         context = ssl.create_default_context()
@@ -1423,6 +1439,7 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                     for part in msg.walk():
                         content_type = part.get_content_type()
                         content_disposition = str(part.get("Content-Disposition") or "").lower()
+                        content_id = _clean_content_id(part.get("Content-ID"))
                         filename = part.get_filename()
 
                         # More thorough attachment detection
@@ -1495,7 +1512,9 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                                         'filename': decoded_filename,
                                         'content_type': content_type or 'application/octet-stream',
                                         'size': len(payload),
-                                        'data': base64.b64encode(payload).decode('ascii')
+                                        'data': base64.b64encode(payload).decode('ascii'),
+                                        'content_id': content_id,
+                                        'content_disposition': content_disposition
                                     })
                             except Exception as att_exc:
                                 print(f"Error extracting attachment: {att_exc}")
@@ -1504,6 +1523,8 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                     content_type = msg.get_content_type()
                     filename = msg.get_filename()
                     is_attachment = bool(filename)
+                    content_id = _clean_content_id(msg.get("Content-ID"))
+                    content_disposition = str(msg.get("Content-Disposition") or "").lower()
                     try:
                         payload = msg.get_payload(decode=True)
                         if isinstance(payload, bytes):
@@ -1533,7 +1554,9 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                             'filename': decode_mime_words(filename) if filename else 'attachment',
                             'content_type': content_type,
                             'size': len(payload or b''),
-                            'data': base64.b64encode(payload or b'').decode('ascii')
+                            'data': base64.b64encode(payload or b'').decode('ascii'),
+                            'content_id': content_id,
+                            'content_disposition': content_disposition
                         })
                     elif content_type == "text/html":
                         body_html = decoded

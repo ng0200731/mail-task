@@ -839,7 +839,8 @@ def decode_mime_words(s):
                 decoded_str += fragment.decode(enc, errors='replace')
             except (LookupError, UnicodeDecodeError):
                 # Try common encodings if specified encoding fails
-                for fallback_enc in ['utf-8', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
+                # Try broader set of common encodings, including gb18030 for Chinese
+                for fallback_enc in ['utf-8', 'gb18030', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
                     try:
                         decoded_str += fragment.decode(fallback_enc, errors='replace')
                         break
@@ -1462,7 +1463,7 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                                             body_plain = payload.decode(charset, errors='replace')
                                         except (LookupError, UnicodeDecodeError):
                                             # Try common encodings if specified charset fails
-                                            for enc in ['utf-8', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
+                                            for enc in ['utf-8', 'gb18030', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
                                                 try:
                                                     body_plain = payload.decode(enc, errors='replace')
                                                     break
@@ -1483,7 +1484,7 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                                             body_html = payload.decode(charset, errors='replace')
                                         except (LookupError, UnicodeDecodeError):
                                             # Try common encodings if specified charset fails
-                                            for enc in ['utf-8', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
+                                            for enc in ['utf-8', 'gb18030', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
                                                 try:
                                                     body_html = payload.decode(enc, errors='replace')
                                                     break
@@ -1534,7 +1535,7 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                                 decoded = payload.decode(charset, errors='replace')
                             except (LookupError, UnicodeDecodeError):
                                 # Try common encodings if specified charset fails
-                                for enc in ['utf-8', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
+                                for enc in ['utf-8', 'gb18030', 'gb2312', 'gbk', 'big5', 'latin1', 'iso-8859-1']:
                                     try:
                                         decoded = payload.decode(enc, errors='replace')
                                         break

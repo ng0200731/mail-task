@@ -8096,6 +8096,58 @@
             const lastUpdatedDisplay = task.updated_at ? escapeHtml(new Date(task.updated_at).toLocaleString()) : '';
             const deadlineDisplay = task.deadline ? escapeHtml(task.deadline) : 'N/A';
 
+            // Process template HTML to embed images from attachments
+            let processedTemplate = task.template || 'No template content';
+            if (processedTemplate && attachments.length > 0) {
+                // First, replace cid: references with embedded images
+                processedTemplate = inlineCidImages(processedTemplate, attachments);
+                
+                // Also try to fix broken image sources by matching with attachments
+                // Create a map of image attachments by filename
+                const imageMap = {};
+                attachments.forEach(att => {
+                    if (att && att.data && att.content_type && att.content_type.startsWith('image/')) {
+                        const filename = (att.filename || '').toLowerCase();
+                        const contentType = att.content_type || 'image/png';
+                        const dataUrl = `data:${contentType};base64,${att.data}`;
+                        imageMap[filename] = dataUrl;
+                        // Also map by content_id if available
+                        if (att.content_id) {
+                            const cid = (att.content_id || '').toString().replace(/[<>]/g, '').trim().toLowerCase();
+                            if (cid) {
+                                imageMap[cid] = dataUrl;
+                            }
+                        }
+                    }
+                });
+                
+                // Replace broken image sources (data: URLs that failed, or empty src)
+                processedTemplate = processedTemplate.replace(/<img([^>]*)\s+src\s*=\s*["']([^"']*)["']([^>]*)>/gi, (match, before, src, after) => {
+                    // Skip if already a valid data URL
+                    if (src && src.startsWith('data:')) {
+                        return match;
+                    }
+                    // Skip if it's a valid external URL
+                    if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
+                        return match;
+                    }
+                    // Try to find matching attachment
+                    const srcLower = src.toLowerCase();
+                    // Check by filename
+                    for (const [key, dataUrl] of Object.entries(imageMap)) {
+                        if (srcLower.includes(key) || key.includes(srcLower)) {
+                            return `<img${before} src="${dataUrl}"${after}>`;
+                        }
+                    }
+                    // Check by cid
+                    const cidMatch = src.match(/cid:([^"'\s]+)/i);
+                    if (cidMatch && imageMap[cidMatch[1].toLowerCase()]) {
+                        return `<img${before} src="${imageMap[cidMatch[1].toLowerCase()]}"${after}>`;
+                    }
+                    return match;
+                });
+            }
+
             // Render attachments
             let attachmentsHtml = '';
             if (attachments.length > 0) {
@@ -8108,8 +8160,16 @@
                     const isPDF = contentType === 'application/pdf' || (att.filename && att.filename.toLowerCase().endsWith('.pdf'));
                     const dataUrl = att.data ? `data:${contentType};base64,${att.data}` : null;
                     
+                    // Thumbnail for images
+                    const thumbnailHtml = isImage && dataUrl 
+                        ? `<div style="margin-bottom: 10px;">
+                            <img src="${dataUrl}" alt="${filename}" style="max-width: 150px; max-height: 150px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; object-fit: contain;" onclick="openTaskListAttachment(${task.id}, ${idx})" title="Click to view full size">
+                           </div>`
+                        : '';
+                    
                     return `
                         <div style="margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #ffffff;">
+                            ${thumbnailHtml}
                             <div style="font-weight: bold; margin-bottom: 8px; font-size: 15px;">${filename}</div>
                             <div style="font-size: 12px; color: #666; margin-bottom: 12px;">${contentType} • ${size}</div>
                             <div style="margin-top: 10px;">
@@ -8181,7 +8241,7 @@
                         <div style="margin-top: 30px; margin-bottom: 30px;">
                             <strong style="display: block; margin-bottom: 15px; font-size: 16px; color: #333;">Template/Context:</strong>
                             <div style="padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; max-height: 500px; overflow-y: auto; line-height: 1.8;">
-                                ${task.template || 'No template content'}
+                                ${processedTemplate}
                             </div>
                         </div>
 

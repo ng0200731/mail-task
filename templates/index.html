@@ -7350,6 +7350,27 @@
                 document.removeEventListener('paste', taskModalPasteHandler);
                 taskModalPasteHandler = null;
             }
+            
+            // Remove drag-and-drop handlers from dropzone
+            const dropzone = document.getElementById('follow-up-attachment-dropzone');
+            if (dropzone) {
+                if (followUpDropzoneHandlers.dragover) {
+                    dropzone.removeEventListener('dragover', followUpDropzoneHandlers.dragover);
+                    followUpDropzoneHandlers.dragover = null;
+                }
+                if (followUpDropzoneHandlers.dragleave) {
+                    dropzone.removeEventListener('dragleave', followUpDropzoneHandlers.dragleave);
+                    followUpDropzoneHandlers.dragleave = null;
+                }
+                if (followUpDropzoneHandlers.drop) {
+                    dropzone.removeEventListener('drop', followUpDropzoneHandlers.drop);
+                    followUpDropzoneHandlers.drop = null;
+                }
+                if (followUpDropzoneHandlers.paste) {
+                    dropzone.removeEventListener('paste', followUpDropzoneHandlers.paste);
+                    followUpDropzoneHandlers.paste = null;
+                }
+            }
         }
 
         function removeTaskAttachment(index) {
@@ -7397,6 +7418,7 @@
 
         // Attachment handling functions for Follow-up Task Modal (mirror task form attachments)
         let taskModalPasteHandler = null;
+        let followUpDropzoneHandlers = { dragover: null, dragleave: null, drop: null, paste: null };
         
         function setupFollowUpAttachmentDragAndDrop() {
             const dropzone = document.getElementById('follow-up-attachment-dropzone');
@@ -7406,6 +7428,20 @@
             if (!dropzone || !fileInput || !browseButton) {
                 console.warn('Follow-up attachment elements not found:', { dropzone: !!dropzone, fileInput: !!fileInput, browseButton: !!browseButton });
                 return;
+            }
+            
+            // Remove old event listeners if they exist to prevent duplicates
+            if (followUpDropzoneHandlers.dragover) {
+                dropzone.removeEventListener('dragover', followUpDropzoneHandlers.dragover);
+            }
+            if (followUpDropzoneHandlers.dragleave) {
+                dropzone.removeEventListener('dragleave', followUpDropzoneHandlers.dragleave);
+            }
+            if (followUpDropzoneHandlers.drop) {
+                dropzone.removeEventListener('drop', followUpDropzoneHandlers.drop);
+            }
+            if (followUpDropzoneHandlers.paste) {
+                dropzone.removeEventListener('paste', followUpDropzoneHandlers.paste);
             }
             
             // Remove inline onchange handler and use event listener instead
@@ -7426,27 +7462,37 @@
             // Make dropzone focusable for paste
             dropzone.setAttribute('tabindex', '0');
             
-            // Drag and drop handlers
-            dropzone.addEventListener('dragover', (e) => {
+            // Drag and drop handlers - store references so we can remove them later
+            followUpDropzoneHandlers.dragover = (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 dropzone.style.backgroundColor = '#e9e9e9';
-            });
+            };
+            dropzone.addEventListener('dragover', followUpDropzoneHandlers.dragover);
             
-            dropzone.addEventListener('dragleave', () => {
-                dropzone.style.backgroundColor = '#f9f9f9';
-            });
-            
-            dropzone.addEventListener('drop', (e) => {
+            followUpDropzoneHandlers.dragleave = (e) => {
                 e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.backgroundColor = '#f9f9f9';
+            };
+            dropzone.addEventListener('dragleave', followUpDropzoneHandlers.dragleave);
+            
+            followUpDropzoneHandlers.drop = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 dropzone.style.backgroundColor = '#f9f9f9';
                 const files = Array.from(e.dataTransfer.files);
-                handleFollowUpAttachmentFiles(files);
-            });
+                if (files.length > 0) {
+                    handleFollowUpAttachmentFiles(files);
+                }
+            };
+            dropzone.addEventListener('drop', followUpDropzoneHandlers.drop);
 
             // Paste image from clipboard - handle on dropzone
-            dropzone.addEventListener('paste', (e) => {
+            followUpDropzoneHandlers.paste = (e) => {
                 handleTaskModalPaste(e);
-            });
+            };
+            dropzone.addEventListener('paste', followUpDropzoneHandlers.paste);
             
             // Global paste handler when modal is open
             if (taskModalPasteHandler) {

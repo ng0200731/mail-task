@@ -2513,6 +2513,11 @@ def fetch_lcf():
         'use_tls': data.get('use_tls', LCF_CONFIG.get('use_tls', False))
     }
 
+    # Fetch only today's emails (days_back=0) to avoid reloading older mail each time.
+    # Because we persist to the database with a UNIQUE(provider, email_uid) constraint,
+    # the database accumulates day-by-day without duplicates. After 7 days of daily fetches,
+    # the DB will contain the last 7 days of mail (and will keep accumulating beyond that
+    # unless a cleanup policy is added).
     result = fetch_emails(
         config['imap_server'],
         config['port'],
@@ -2521,7 +2526,7 @@ def fetch_lcf():
         config['use_ssl'],
         config['use_tls'],
         limit,
-        days_back=1
+        days_back=0
     )
     try:
         save_emails('lcf', result.get('emails', []))

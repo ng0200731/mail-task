@@ -1219,6 +1219,19 @@
             border-left: 3px solid #000000;
         }
 
+        /* Freeze first three visible columns */
+        .task-table .freeze-col {
+            position: sticky;
+            z-index: 3;
+            background: #ffffff;
+        }
+        .task-table thead th.freeze-col {
+            z-index: 5;
+        }
+        .task-table .freeze-col-1 { left: 0; }
+        .task-table .freeze-col-2 { left: 170px; }
+        .task-table .freeze-col-3 { left: 350px; }
+
         #customer-remark.empty:before {
             content: attr(data-placeholder);
             color: #999;
@@ -7894,9 +7907,9 @@
                 return `
                     <tr ${rowAttributes}>
                         <td>${escapeHtml(task.sequence || '')}</td>
-                        <td>${escapeHtml(businessType)}</td>
-                        <td>${escapeHtml(task.customer || '')}</td>
-                        <td>${escapeHtml(companyName)}</td>
+                        <td class="freeze-col freeze-col-1">${escapeHtml(businessType)}</td>
+                        <td class="freeze-col freeze-col-2">${escapeHtml(companyName)}</td>
+                        <td class="freeze-col freeze-col-3">${escapeHtml(task.customer || '')}</td>
                         <td>${escapeHtml(task.email || '')}</td>
                         <td>${escapeHtml(task.catalogue || '')}</td>
                         <td class="task-template-cell" title="${escapeHtml(templatePlain)}">
@@ -7939,9 +7952,9 @@
             return `
                 <tr class="task-editing-row" ${rowAttributes}>
                     <td>${escapeHtml(task.sequence || '')}</td>
-                    <td>${escapeHtml(businessType)}</td>
-                    <td><input type="text" class="inline-task-input" data-field="customer" value="${escapeHtml(task.customer || '')}"></td>
-                    <td><input type="text" class="inline-task-input" data-field="company_name" value="${escapeHtml(companyName)}" readonly></td>
+                    <td class="freeze-col freeze-col-1">${escapeHtml(businessType)}</td>
+                    <td class="freeze-col freeze-col-2"><input type="text" class="inline-task-input" data-field="company_name" value="${escapeHtml(companyName)}" readonly></td>
+                    <td class="freeze-col freeze-col-3"><input type="text" class="inline-task-input" data-field="customer" value="${escapeHtml(task.customer || '')}"></td>
                     <td><input type="text" class="inline-task-input" data-field="email" value="${escapeHtml(task.email || '')}"></td>
                     <td>
                         <select class="inline-task-type-select" data-field="catalogue">
@@ -8016,9 +8029,9 @@
                                     <thead>
                                         <tr>
                                             <th>Sequence</th>
-                                            <th>Business Type</th>
-                                            <th>Customer</th>
-                                            <th>Company Name</th>
+                                            <th class="freeze-col freeze-col-1" style="min-width: 170px;">Business Type</th>
+                                            <th class="freeze-col freeze-col-2" style="min-width: 180px;">Company Name</th>
+                                            <th class="freeze-col freeze-col-3" style="min-width: 180px;">Customer</th>
                                             <th>Email</th>
                                             <th>Type</th>
                                             <th>Context</th>
@@ -8033,9 +8046,9 @@
                                         </tr>
                                         <tr>
                                             <th><input type="text" class="task-filter-input" data-field="sequence" placeholder="Filter sequence"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="business_type" placeholder="Filter business type"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="customer" placeholder="Filter customer"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="company_name" placeholder="Filter company name"></th>
+                                            <th class="freeze-col freeze-col-1"><input type="text" class="task-filter-input" data-field="business_type" placeholder="Filter business type"></th>
+                                            <th class="freeze-col freeze-col-2"><input type="text" class="task-filter-input" data-field="company_name" placeholder="Filter company name"></th>
+                                            <th class="freeze-col freeze-col-3"><input type="text" class="task-filter-input" data-field="customer" placeholder="Filter customer"></th>
                                             <th><input type="text" class="task-filter-input" data-field="email" placeholder="Filter email"></th>
                                             <th><input type="text" class="task-filter-input" data-field="catalogue" placeholder="Filter type"></th>
                                             <th><input type="text" class="task-filter-input" data-field="template" placeholder="Filter context"></th>

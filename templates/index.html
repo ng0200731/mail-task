@@ -574,6 +574,15 @@
             color: #000000;
         }
 
+        /* Centered loading block with spinner for Receive Mail list */
+        .loading-centered {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+        }
+
         .error {
             padding: 15px;
             border: 2px solid #000000;
@@ -2822,6 +2831,35 @@
             return null;
         }
 
+        // Normalize Content-ID values to a comparable lowercase form without angle brackets
+        function normalizeCid(value) {
+            return (value || '').toString().replace(/[<>]/g, '').trim().toLowerCase();
+        }
+
+        // Return only those attachments that should be treated as "real" attachments
+        // (i.e., exclude embedded inline images that are referenced via cid: in the HTML body).
+        function getVisibleEmailAttachments(email) {
+            if (!email || !Array.isArray(email.attachments)) {
+                return [];
+            }
+            const html = (email.html_body || '').toString().toLowerCase();
+            if (!html) {
+                return email.attachments;
+            }
+            return email.attachments.filter(att => {
+                if (!att) return false;
+                const cid = normalizeCid(att.content_id || att.contentId || '');
+                const contentType = (att.content_type || att.contentType || '').toString().toLowerCase();
+                const isImage = contentType.startsWith('image/');
+                if (!cid || !isImage) {
+                    // No cid or not an image => treat as a normal downloadable attachment
+                    return true;
+                }
+                // If the HTML references this cid image, treat it as embedded only (not a separate attachment)
+                return !html.includes(`cid:${cid}`);
+            });
+        }
+
         function registerEmailKeys(emailObj, keySet) {
             if (!emailObj || !keySet) return;
             const id = (emailObj.id || emailObj.email_uid || '').trim();
@@ -2962,6 +3000,11 @@
 
         async function loadCachedEmailsOnStartup() {
             const emailList = document.getElementById('email-list');
+            // Show a centered spinner and message while we load emails from the local database
+            if (emailList) {
+                emailList.innerHTML = '<div class="loading loading-centered"><div class="loading-spinner"></div><div>Fetching local emails...</div></div>';
+                emailList.dataset.cached = 'false';
+            }
             const candidates = [];
             const lastProvider = localStorage.getItem('lastEmailProvider');
             
@@ -6290,7 +6333,10 @@
                 return;
             }
             
-            emailList.innerHTML = currentEmails.map((email, index) => `
+            emailList.innerHTML = currentEmails.map((email, index) => {
+                const visibleAttachments = getVisibleEmailAttachments(email);
+                const hasVisibleAttachments = Array.isArray(visibleAttachments) && visibleAttachments.length > 0;
+                return `
                 <div class="email-item" data-index="${index}">
                     <div class="email-content">
                     <div class="email-header">
@@ -6302,9 +6348,9 @@
                     </div>
                     <div class="email-from">From: ${escapeHtml(email.from || '')}</div>
                         <div class="email-preview">${escapeHtml(email.preview || '')}</div>
-                        ${Array.isArray(email.attachments) && email.attachments.length > 0 ? `
+                        ${hasVisibleAttachments ? `
                             <div class="email-attachments">
-                                ${email.attachments.map(att => `
+                                ${visibleAttachments.map(att => `
                                     <a class="attachment-chip" href="data:${att.content_type || 'application/octet-stream'};base64,${att.data}" download="${escapeHtml(att.filename || 'attachment')}">
                                         📎 ${escapeHtml(att.filename || 'attachment')} (${formatAttachmentSize(att.size || 0)})
                                     </a>
@@ -6313,15 +6359,15 @@
                         ` : ''}
                     </div>
                     <div class="email-actions">
-                        ${Array.isArray(email.attachments) && email.attachments.length > 0 ? `
+                        ${hasVisibleAttachments ? `
                             <button class="form-button email-action-button attachment-button" data-index="${index}" data-attachment="true" title="View attachments">
-                                📎 (${email.attachments.length})
+                                📎 (${visibleAttachments.length})
                             </button>
                         ` : ''}
                         <button class="form-button email-action-button" data-index="${index}">Task</button>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
 
             document.querySelectorAll('.email-item').forEach(item => {
                 item.addEventListener('click', () => {
@@ -6423,10 +6469,14 @@
                 return;
             }
             const email = currentEmails[index];
-            if (!email || !Array.isArray(email.attachments) || email.attachments.length === 0) {
+            if (!email) {
                 return;
             }
-            attachmentList.innerHTML = email.attachments.map((att, idx) => `
+            const visibleAttachments = getVisibleEmailAttachments(email);
+            if (!Array.isArray(visibleAttachments) || visibleAttachments.length === 0) {
+                return;
+            }
+            attachmentList.innerHTML = visibleAttachments.map((att, idx) => `
                 <div class="attachment-row">
                     <div class="attachment-row-info">
                         <strong>${escapeHtml(att.filename || `Attachment ${idx + 1}`)}</strong>
@@ -6939,10 +6989,11 @@
             // Store email for later use (store the full email object)
             window.currentTaskEmail = email;
 
-            // Display attachments
+            // Display attachments (exclude inline embedded images referenced via cid:)
             if (taskAttachmentsDiv) {
-                if (Array.isArray(email.attachments) && email.attachments.length > 0) {
-                    taskAttachmentsDiv.innerHTML = email.attachments.map((att, idx) => {
+                const visibleAttachments = getVisibleEmailAttachments(email);
+                if (Array.isArray(visibleAttachments) && visibleAttachments.length > 0) {
+                    taskAttachmentsDiv.innerHTML = visibleAttachments.map((att, idx) => {
                         const contentType = att.content_type || 'application/octet-stream';
                         const isImage = contentType.startsWith('image/');
                         const isPDF = contentType === 'application/pdf' || (att.filename && att.filename.toLowerCase().endsWith('.pdf'));
@@ -6968,10 +7019,7 @@
                     }).join('');
                     
                     // Store attachment data for preview and submission
-                    if (!window.taskModalAttachments) {
-                        window.taskModalAttachments = [];
-                    }
-                    window.taskModalAttachments = email.attachments;
+                    window.taskModalAttachments = Array.from(visibleAttachments);
                     window.taskModalEmailIndex = index;
                 } else {
                     taskAttachmentsDiv.innerHTML = '<div style="padding: 10px; color: #666; font-style: italic;">No attachments</div>';

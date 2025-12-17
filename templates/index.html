@@ -1168,6 +1168,17 @@
             font-size: 12px;
         }
 
+        /* Resizable column handle */
+        .email-col-resizer {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 6px;
+            height: 100%;
+            cursor: col-resize;
+            user-select: none;
+        }
+
         /* Sticky headers for customer and task list tables */
         .customer-table thead th {
             position: sticky;
@@ -1454,7 +1465,7 @@
                 <button class="form-button" onclick="fetch163Emails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch 163.com</button>
                 <button class="form-button" onclick="fetchLCFEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch LCF</button>
                 <button class="form-button" onclick="fetchQQEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch QQ Email</button>
-                <button class="form-button" onclick="toggleEmailTableView()" style="margin-bottom: 20px; font-size: 12px;">📋 Table View</button>
+                <button class="form-button" onclick="toggleEmailTableView()" style="margin-bottom: 20px; font-size: 12px;">📋 Table/Card View</button>
                 <div id="error-message" class="message hidden"></div>
                 <div id="email-list" class="email-list"></div>
             </div>
@@ -2513,6 +2524,7 @@
         const customerTableBody = document.getElementById('customer-table-body');
         const customerEmptyMessage = document.getElementById('customer-empty');
         let currentEmails = [];
+        let allEmails = [];
         let currentProvider = null;
         // Default to table view for detailed Receive Mail display
         let currentEmailViewMode = 'table'; // 'card' or 'table'
@@ -2870,7 +2882,70 @@
                 emailList.dataset.viewMode = currentEmailViewMode;
             }
             // Re-render current emails in the new view mode
-            displayEmails(currentEmails || [], { provider: currentProvider, cached: (emailList && emailList.dataset.cached === 'true') });
+            const base = allEmails.length ? allEmails : currentEmails;
+            displayEmails(base, { provider: currentProvider, cached: (emailList && emailList.dataset.cached === 'true'), filtered: true });
+        }
+
+        function setupEmailColumnResizers() {
+            const emailList = document.getElementById('email-list');
+            if (!emailList) return;
+            const table = emailList.querySelector('.customer-table');
+            if (!table) return;
+            const headers = Array.from(table.querySelectorAll('thead tr:nth-child(1) th'));
+            if (headers.length !== 4) return;
+
+            headers.forEach((th, index) => {
+                const resizer = th.querySelector('.email-col-resizer');
+                if (!resizer) return;
+                let startX = 0;
+                let startWidths = [];
+                let tableWidth = 0;
+
+                resizer.onmousedown = (e) => {
+                    e.preventDefault();
+                    startX = e.clientX;
+                    tableWidth = table.offsetWidth;
+                    startWidths = headers.map(h => h.offsetWidth);
+
+                    document.onmousemove = (moveEvt) => {
+                        moveEvt.preventDefault();
+                        const dx = moveEvt.clientX - startX;
+                        const newWidths = startWidths.slice();
+                        newWidths[index] = Math.max(60, startWidths[index] + dx);
+                        // Keep total width constant by adjusting the last column
+                        const totalStart = startWidths.reduce((a, b) => a + b, 0);
+                        const diff = totalStart - newWidths.reduce((a, b) => a + b, 0);
+                        newWidths[headers.length - 1] += diff;
+                        headers.forEach((h, i) => {
+                            const pct = (newWidths[i] / tableWidth) * 100;
+                            h.style.width = pct + '%';
+                        });
+                    };
+
+                    document.onmouseup = () => {
+                        document.onmousemove = null;
+                        document.onmouseup = null;
+                        // Persist widths to profile
+                        const tableWidthNow = table.offsetWidth || tableWidth || 1;
+                        const layout = {};
+                        headers.forEach((h) => {
+                            const col = h.getAttribute('data-column');
+                            const pct = (h.offsetWidth / tableWidthNow) * 100;
+                            if (col) {
+                                layout[col] = pct;
+                            }
+                        });
+                        if (layout.date && layout.name && layout.content && layout.attachments) {
+                            saveEmailLayoutToProfile({
+                                date: layout.date,
+                                name: layout.name,
+                                content: layout.content,
+                                attachments: layout.attachments
+                            });
+                        }
+                    };
+                };
+            });
         }
 
         function registerEmailKeys(emailObj, keySet) {
@@ -3579,6 +3654,7 @@
             await loadCustomers(false);
             await saveYesterdayEmailsToSQLite();
             await loadCachedEmailsOnStartup();
+            populateEmailLayoutInputs();
             // Load countries for dropdown
             loadCountries();
             // Load customer sources for dropdown
@@ -6368,9 +6444,93 @@
             return { preview, truncated: true };
         }
 
+        function getEmailLayoutFromProfile() {
+            const profile = getCurrentProfile();
+            const layout = profile.emailLayout || {};
+            const date = Number(layout.date);
+            const name = Number(layout.name);
+            const content = Number(layout.content);
+            const attachments = Number(layout.attachments);
+            // Fallback defaults; values do not need to sum to 100 exactly.
+            return {
+                date: !Number.isNaN(date) && date > 0 ? date : 15,
+                name: !Number.isNaN(name) && name > 0 ? name : 30,
+                content: !Number.isNaN(content) && content > 0 ? content : 15,
+                attachments: !Number.isNaN(attachments) && attachments > 0 ? attachments : 40
+            };
+        }
+
+        function saveEmailLayoutToProfile(layout) {
+            const selectedProfile = localStorage.getItem('selectedProfile') || 'profile1';
+            const profiles = JSON.parse(localStorage.getItem('emailProfiles') || '{}');
+            const profile = profiles[selectedProfile] || (profiles[selectedProfile] = { name: selectedProfile });
+            profile.emailLayout = {
+                date: layout.date,
+                name: layout.name,
+                content: layout.content,
+                attachments: layout.attachments
+            };
+            localStorage.setItem('emailProfiles', JSON.stringify(profiles));
+        }
+
+        // Table layout is now driven primarily by drag-resize, but we keep helpers
+        // for reading/saving layout to the current profile.
+        function populateEmailLayoutInputs() {
+            const layout = getEmailLayoutFromProfile();
+            // No visible numeric inputs now, but we may reuse this function later.
+            return layout;
+        }
+
+        function filterEmailTable() {
+            const emailList = document.getElementById('email-list');
+            if (!emailList) return;
+            const base = allEmails && allEmails.length ? allEmails : currentEmails;
+            const dateInput = document.getElementById('email-filter-date');
+            const nameInput = document.getElementById('email-filter-name');
+            const contentInput = document.getElementById('email-filter-content');
+            const attachmentsInput = document.getElementById('email-filter-attachments');
+            const dateQuery = (dateInput && dateInput.value || '').trim().toLowerCase();
+            const nameQuery = (nameInput && nameInput.value || '').trim().toLowerCase();
+            const contentQuery = (contentInput && contentInput.value || '').trim().toLowerCase();
+            const attachQuery = (attachmentsInput && attachmentsInput.value || '').trim().toLowerCase();
+
+            if (!dateQuery && !nameQuery && !contentQuery && !attachQuery) {
+                const isCached = emailList.dataset && emailList.dataset.cached === 'true';
+                displayEmails(base, { provider: currentProvider, cached: isCached, filtered: true });
+                return;
+            }
+
+            const filtered = base.filter(email => {
+                if (!email) return false;
+                const dateVal = (email.date || '').toString().toLowerCase();
+                const fromVal = (email.from || '').toString().toLowerCase();
+                const displayName = getEmailDisplayName(email.from || '').toLowerCase();
+                const bodyText = extractEmailBodyText(email).toLowerCase();
+                const attachments = Array.isArray(email.attachments) ? email.attachments : [];
+
+                if (dateQuery && !dateVal.includes(dateQuery)) return false;
+                if (nameQuery && !(fromVal.includes(nameQuery) || displayName.includes(nameQuery))) return false;
+                if (contentQuery && !bodyText.includes(contentQuery)) return false;
+                if (attachQuery) {
+                    const match = attachments.some(att => {
+                        const fname = (att && att.filename || '').toString().toLowerCase();
+                        return fname.includes(attachQuery);
+                    });
+                    if (!match) return false;
+                }
+                return true;
+            });
+
+            const isCached = emailList.dataset && emailList.dataset.cached === 'true';
+            displayEmails(filtered, { provider: currentProvider, cached: isCached, filtered: true });
+        }
+
         function displayEmails(emails, options = {}) {
             const emailList = document.getElementById('email-list');
             currentEmails = Array.isArray(emails) ? emails.map(email => ensureEmailSequence({ ...email })) : [];
+            if (!options.filtered) {
+                allEmails = currentEmails.slice();
+            }
             const provider = options.provider || currentProvider;
             const isCached = !!options.cached;
             if (provider) {
@@ -6383,25 +6543,45 @@
             emailList.dataset.cached = isCached ? 'true' : 'false';
             emailList.dataset.viewMode = currentEmailViewMode;
 
-            if (currentEmails.length === 0) {
-                emailList.innerHTML = '<div class="loading">No emails found for this provider.</div>';
-                return;
-            }
-            
             if (currentEmailViewMode === 'table') {
                 // Table view for all providers
+                const layout = getEmailLayoutFromProfile();
                 emailList.innerHTML = `
                     <table class="customer-table">
                         <thead>
                             <tr>
-                                <th style="width: 20%;">Date</th>
-                                <th style="width: 20%;">Name</th>
-                                <th style="width: 34%;">Content</th>
-                                <th style="width: 26%;">Attachments</th>
+                                <th style="width: ${layout.date}%; min-width: 80px;" data-column="date">
+                                    Date
+                                    <span class="email-col-resizer" data-column="date"></span>
+                                </th>
+                                <th style="width: ${layout.name}%; min-width: 120px;" data-column="name">
+                                    Name
+                                    <span class="email-col-resizer" data-column="name"></span>
+                                </th>
+                                <th style="width: ${layout.content}%; min-width: 120px;" data-column="content">
+                                    Content
+                                    <span class="email-col-resizer" data-column="content"></span>
+                                </th>
+                                <th style="width: ${layout.attachments}%; min-width: 120px;" data-column="attachments">
+                                    Attachments
+                                    <span class="email-col-resizer" data-column="attachments"></span>
+                                </th>
+                            </tr>
+                            <tr>
+                                <th><input id="email-filter-date" class="customer-filter-input" type="text" placeholder="Filter date" oninput="filterEmailTable()"></th>
+                                <th><input id="email-filter-name" class="customer-filter-input" type="text" placeholder="Filter name" oninput="filterEmailTable()"></th>
+                                <th><input id="email-filter-content" class="customer-filter-input" type="text" placeholder="Filter content" oninput="filterEmailTable()"></th>
+                                <th><input id="email-filter-attachments" class="customer-filter-input" type="text" placeholder="Filter attachments" oninput="filterEmailTable()"></th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${currentEmails.map((email, index) => {
+                            ${currentEmails.length === 0 ? `
+                                <tr>
+                                    <td colspan="4" style="text-align: center; padding: 20px; color: #666; font-style: italic;">
+                                        No emails found for this provider.
+                                    </td>
+                                </tr>
+                            ` : currentEmails.map((email, index) => {
                                 const visibleAttachments = getVisibleEmailAttachments(email);
                                 const hasVisibleAttachments = Array.isArray(visibleAttachments) && visibleAttachments.length > 0;
                                 const displayName = getEmailDisplayName(email.from || '');
@@ -6500,6 +6680,8 @@
                     });
                 });
                 // Attachments in table view are direct download links; no Task button in this column.
+                // Enable column resizing
+                setupEmailColumnResizers();
             } else {
                 document.querySelectorAll('.email-item').forEach(item => {
                     item.addEventListener('click', () => {

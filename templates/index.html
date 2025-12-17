@@ -2947,8 +2947,9 @@
             if (!provider) {
                 return Promise.resolve([]);
             }
-            const daysToLoad = 2; // fetch emails from the past 2 days by default
-            return fetch(`/api/emails?provider=${encodeURIComponent(provider)}&days=${daysToLoad}`)
+            // Load all stored emails for this provider (no time limit). The backend
+            // already filters per logged-in user.
+            return fetch(`/api/emails?provider=${encodeURIComponent(provider)}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
@@ -5708,7 +5709,9 @@
             // Build request data. If username/password are not provided in Settings,
             // backend will fall back to server-side LCF configuration (.env).
             const requestData = {
-                limit: 50,
+                // Use a higher limit so we can load the whole day's emails.
+                // The backend/database will deduplicate by (provider, email_uid).
+                limit: 500,
                 imap_server: lcf.imap_server || 'imap.qiye.163.com',
                 port: lcf.port || 993,
                 use_ssl: lcf.use_ssl !== undefined ? lcf.use_ssl : true,
@@ -6275,7 +6278,7 @@
             emailList.dataset.cached = isCached ? 'true' : 'false';
 
             if (currentEmails.length === 0) {
-                emailList.innerHTML = '<div class="loading">No emails found for today or yesterday</div>';
+                emailList.innerHTML = '<div class="loading">No emails found for this provider.</div>';
                 return;
             }
             

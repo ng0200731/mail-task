@@ -2503,7 +2503,10 @@ def fetch_lcf():
         return error_response, status_code
 
     data = request.json or {}
-    limit = data.get('limit', 50)
+    # For LCF, requirement is: each fetch must load ALL emails for *today*.
+    # We therefore ignore any client-provided limit and use limit = 0, which
+    # in the IMAP helper means "no trimming" of the IDs returned by the server.
+    limit = 0
 
     config = {
         'imap_server': data.get('imap_server', LCF_CONFIG['imap_server']),
@@ -2514,11 +2517,11 @@ def fetch_lcf():
         'use_tls': data.get('use_tls', LCF_CONFIG.get('use_tls', False))
     }
 
-    # Fetch only today's emails (days_back=0) to avoid reloading older mail each time.
-    # Because we persist to the database with a UNIQUE(provider, email_uid) constraint,
-    # the database accumulates day-by-day without duplicates. After 7 days of daily fetches,
-    # the DB will contain the last 7 days of mail (and will keep accumulating beyond that
-    # unless a cleanup policy is added).
+    # Always fetch only today's emails for LCF (days_back = 0), and with
+    # limit = 0 (all messages returned by the IMAP SINCE search). The IMAP
+    # helper will further filter by today's date, so even if the server
+    # returns older messages for the SINCE search, only today's messages
+    # are kept.
     result = fetch_emails(
         config['imap_server'],
         config['port'],
@@ -2529,6 +2532,7 @@ def fetch_lcf():
         limit,
         days_back=0
     )
+
     try:
         save_emails('lcf', result.get('emails', []))
     except Exception as exc:
@@ -2793,7 +2797,9 @@ def handle_emails():
         
         # Optional days parameter (number of days back to include)
         days_param = request.args.get('days')
-        default_days = 1
+        # By default, return all days (0 = no time filter). Clients can still
+        # pass a positive "days" value to limit the range.
+        default_days = 0
         if days_param is None or days_param == '':
             days = default_days
         else:

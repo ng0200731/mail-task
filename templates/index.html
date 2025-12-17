@@ -1490,7 +1490,7 @@
 
                         <!-- Row 3: Web Site | Source (same line, divided evenly) -->
                         <div class="form-group">
-                            <label for="customer-website">Web Site</label>
+                            <label for="customer-website">Web Site (optional)</label>
                             <input type="url" id="customer-website" placeholder="https://example.com">
                         </div>
                         <div class="form-group">
@@ -1512,7 +1512,7 @@
 
                         <!-- Row 4: Attachment (new line, full width) -->
                         <div class="form-group form-group-full">
-                            <label>Attachment</label>
+                            <label>Attachment (optional)</label>
                             <div id="customer-attachment-dropzone" tabindex="0" style="border: 2px dashed #000000; padding: 20px; text-align: center; background-color: #f9f9f9; min-height: 100px; margin-bottom: 15px;">
                                 <p style="margin: 0; color: #666;">Drag and drop files here, click the Browse button, or paste images (Ctrl+V)</p>
                                 <button type="button" id="customer-attachment-browse-btn" class="form-button" style="margin-top: 12px; padding: 8px 20px;">Browse</button>
@@ -1523,7 +1523,7 @@
 
                         <!-- Row 5: Remark (new line, full width) -->
                         <div class="form-group form-group-full form-group-rich">
-                            <label for="customer-remark">Remark (Rich Text)</label>
+                            <label for="customer-remark">Remark (Rich Text, optional)</label>
                             <div id="customer-remark" contenteditable="true" style="min-height: 120px; border: 1px solid #000000; padding: 8px; font-family: Arial, sans-serif; font-size: 14px; background-color: #ffffff; color: #000000; overflow-y: auto;" data-placeholder="Enter remarks with HTML formatting..."></div>
                             <div style="margin-top: 5px; font-size: 12px; color: #666;">
                                 <button type="button" onclick="formatText('bold')" style="padding: 3px 8px; margin-right: 5px; font-size: 11px;">Bold</button>
@@ -2964,10 +2964,18 @@
             const emailList = document.getElementById('email-list');
             const candidates = [];
             const lastProvider = localStorage.getItem('lastEmailProvider');
-            if (lastProvider) {
+            
+            // Always prefer LCF first for initial Receive Mail view, so that by
+            // default we show previously saved LCF emails from the database
+            // (and only fetch from the server when the user explicitly clicks
+            // the Fetch LCF button).
+            if (!candidates.includes('lcf')) {
+                candidates.push('lcf');
+            }
+            if (lastProvider && !candidates.includes(lastProvider)) {
                 candidates.push(lastProvider);
             }
-            ['gmail', 'qq', '163', 'lcf'].forEach((provider) => {
+            ['gmail', 'qq', '163'].forEach((provider) => {
                 if (!candidates.includes(provider)) {
                     candidates.push(provider);
                 }

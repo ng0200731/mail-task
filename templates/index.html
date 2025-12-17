@@ -1453,7 +1453,8 @@
                 <button class="form-button" onclick="checkGmailStatus()" style="margin-bottom: 20px; margin-right: 10px; font-size: 12px;">Check Gmail Status</button>
                 <button class="form-button" onclick="fetch163Emails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch 163.com</button>
                 <button class="form-button" onclick="fetchLCFEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch LCF</button>
-                <button class="form-button" onclick="fetchQQEmails()" style="margin-bottom: 20px;">Fetch QQ Email</button>
+                <button class="form-button" onclick="fetchQQEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch QQ Email</button>
+                <button class="form-button" onclick="toggleEmailTableView()" style="margin-bottom: 20px; font-size: 12px;">📋 Table View</button>
                 <div id="error-message" class="message hidden"></div>
                 <div id="email-list" class="email-list"></div>
             </div>
@@ -2513,6 +2514,8 @@
         const customerEmptyMessage = document.getElementById('customer-empty');
         let currentEmails = [];
         let currentProvider = null;
+        // Default to table view for detailed Receive Mail display
+        let currentEmailViewMode = 'table'; // 'card' or 'table'
         let customerCache = [];
         let currentPreviewObjectUrl = null;
         let customerAttachments = [];
@@ -2858,6 +2861,16 @@
                 // If the HTML references this cid image, treat it as embedded only (not a separate attachment)
                 return !html.includes(`cid:${cid}`);
             });
+        }
+
+        function toggleEmailTableView() {
+            currentEmailViewMode = currentEmailViewMode === 'table' ? 'card' : 'table';
+            const emailList = document.getElementById('email-list');
+            if (emailList) {
+                emailList.dataset.viewMode = currentEmailViewMode;
+            }
+            // Re-render current emails in the new view mode
+            displayEmails(currentEmails || [], { provider: currentProvider, cached: (emailList && emailList.dataset.cached === 'true') });
         }
 
         function registerEmailKeys(emailObj, keySet) {
@@ -6314,6 +6327,47 @@
             return `${(size / 1024).toFixed(1)} KB`;
         }
 
+        function getEmailDisplayName(fromHeader) {
+            const raw = (fromHeader || '').toString();
+            const match = raw.match(/^(.*?)(<.+?>)?$/);
+            if (!match) return raw;
+            const namePart = (match[1] || '').trim();
+            if (namePart) return namePart;
+            return raw;
+        }
+
+        function formatEmailDate(dateStr) {
+            if (!dateStr) return '';
+            const raw = dateStr.toString().trim();
+            // Expected full format: YYYY-MM-DD HH:MM:SS (or similar).
+            // For table view we now show both date and time (no truncation).
+            return raw;
+        }
+
+        function extractEmailBodyText(email) {
+            // Prefer plain text if available
+            if (email && email.plain_body) {
+                return email.plain_body.toString();
+            }
+            // Fallback: strip HTML tags from html_body
+            if (email && email.html_body) {
+                const div = document.createElement('div');
+                div.innerHTML = email.html_body;
+                return div.textContent || div.innerText || '';
+            }
+            // Last resort: use preview
+            return (email && email.preview) ? email.preview.toString() : '';
+        }
+
+        function truncateWords(text, maxWords) {
+            const words = (text || '').trim().split(/\s+/).filter(Boolean);
+            if (words.length <= maxWords) {
+                return { preview: words.join(' '), truncated: false };
+            }
+            const preview = words.slice(0, maxWords).join(' ');
+            return { preview, truncated: true };
+        }
+
         function displayEmails(emails, options = {}) {
             const emailList = document.getElementById('email-list');
             currentEmails = Array.isArray(emails) ? emails.map(email => ensureEmailSequence({ ...email })) : [];
@@ -6327,66 +6381,145 @@
                 return;
             }
             emailList.dataset.cached = isCached ? 'true' : 'false';
+            emailList.dataset.viewMode = currentEmailViewMode;
 
             if (currentEmails.length === 0) {
                 emailList.innerHTML = '<div class="loading">No emails found for this provider.</div>';
                 return;
             }
             
-            emailList.innerHTML = currentEmails.map((email, index) => {
-                const visibleAttachments = getVisibleEmailAttachments(email);
-                const hasVisibleAttachments = Array.isArray(visibleAttachments) && visibleAttachments.length > 0;
-                return `
-                <div class="email-item" data-index="${index}">
-                    <div class="email-content">
-                    <div class="email-header">
-                            <div class="email-subject">
-                                ${escapeHtml(email.subject || 'No Subject')}
-                                ${email.sequence ? `<span class="email-sequence-inline">${escapeHtml(email.sequence)}</span>` : ''}
-                            </div>
-                        <div class="email-date">${escapeHtml(email.date || '')}</div>
+            if (currentEmailViewMode === 'table') {
+                // Table view for all providers
+                emailList.innerHTML = `
+                    <table class="customer-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 20%;">Date</th>
+                                <th style="width: 20%;">Name</th>
+                                <th style="width: 34%;">Content</th>
+                                <th style="width: 26%;">Attachments</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${currentEmails.map((email, index) => {
+                                const visibleAttachments = getVisibleEmailAttachments(email);
+                                const hasVisibleAttachments = Array.isArray(visibleAttachments) && visibleAttachments.length > 0;
+                                const displayName = getEmailDisplayName(email.from || '');
+                                const bodyText = extractEmailBodyText(email);
+                                // Use up to 50 words for preview; still open full Task modal on click
+                                const { preview, truncated } = truncateWords(bodyText, 50);
+                                const attachmentHtml = hasVisibleAttachments
+                                    ? visibleAttachments.map(att => `
+                                        <a class="attachment-chip" href="data:${att.content_type || 'application/octet-stream'};base64,${att.data}" download="${escapeHtml(att.filename || 'attachment')}">
+                                            📎 ${escapeHtml(att.filename || 'attachment')} (${formatAttachmentSize(att.size || 0)})
+                                        </a>
+                                    `).join('')
+                                    : '<span style="color: #666; font-style: italic;">No attachments</span>';
+                                const safePreview = escapeHtml(preview || '');
+                                return `
+                                    <tr class="email-row" data-index="${index}">
+                                        <td>${escapeHtml(formatEmailDate(email.date || ''))}</td>
+                                        <td>${escapeHtml(displayName || '')}</td>
+                                        <td>
+                                            <div class="email-preview-table">
+                                                ${safePreview}${truncated ? '… ' : ''}
+                                                ${truncated ? `<a href="#" class="email-read-more" data-index="${index}">Read more</a>` : ''}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="email-attachments">
+                                                ${attachmentHtml}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                // Existing card view
+                emailList.innerHTML = currentEmails.map((email, index) => {
+                    const visibleAttachments = getVisibleEmailAttachments(email);
+                    const hasVisibleAttachments = Array.isArray(visibleAttachments) && visibleAttachments.length > 0;
+                    return `
+                    <div class="email-item" data-index="${index}">
+                        <div class="email-content">
+                        <div class="email-header">
+                                <div class="email-subject">
+                                    ${escapeHtml(email.subject || 'No Subject')}
+                                    ${email.sequence ? `<span class="email-sequence-inline">${escapeHtml(email.sequence)}</span>` : ''}
+                                </div>
+                            <div class="email-date">${escapeHtml(email.date || '')}</div>
+                        </div>
+                        <div class="email-from">From: ${escapeHtml(email.from || '')}</div>
+                            <div class="email-preview">${escapeHtml(email.preview || '')}</div>
+                            ${hasVisibleAttachments ? `
+                                <div class="email-attachments">
+                                    ${visibleAttachments.map(att => `
+                                        <a class="attachment-chip" href="data:${att.content_type || 'application/octet-stream'};base64,${att.data}" download="${escapeHtml(att.filename || 'attachment')}">
+                                            📎 ${escapeHtml(att.filename || 'attachment')} (${formatAttachmentSize(att.size || 0)})
+                                        </a>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="email-actions">
+                            ${hasVisibleAttachments ? `
+                                <button class="form-button email-action-button attachment-button" data-index="${index}" data-attachment="true" title="View attachments">
+                                    📎 (${visibleAttachments.length})
+                                </button>
+                            ` : ''}
+                            <button class="form-button email-action-button" data-index="${index}">Task</button>
+                        </div>
                     </div>
-                    <div class="email-from">From: ${escapeHtml(email.from || '')}</div>
-                        <div class="email-preview">${escapeHtml(email.preview || '')}</div>
-                        ${hasVisibleAttachments ? `
-                            <div class="email-attachments">
-                                ${visibleAttachments.map(att => `
-                                    <a class="attachment-chip" href="data:${att.content_type || 'application/octet-stream'};base64,${att.data}" download="${escapeHtml(att.filename || 'attachment')}">
-                                        📎 ${escapeHtml(att.filename || 'attachment')} (${formatAttachmentSize(att.size || 0)})
-                                    </a>
-                                `).join('')}
-                            </div>
-                        ` : ''}
-                    </div>
-                    <div class="email-actions">
-                        ${hasVisibleAttachments ? `
-                            <button class="form-button email-action-button attachment-button" data-index="${index}" data-attachment="true" title="View attachments">
-                                📎 (${visibleAttachments.length})
-                            </button>
-                        ` : ''}
-                        <button class="form-button email-action-button" data-index="${index}">Task</button>
-                    </div>
-                </div>
-            `}).join('');
+                `}).join('');
+            }
 
-            document.querySelectorAll('.email-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const index = parseInt(item.getAttribute('data-index'), 10);
-                    openEmailModal(index);
-                });
-            });
-
-            document.querySelectorAll('.email-action-button').forEach(button => {
-                button.addEventListener('click', (evt) => {
-                    evt.stopPropagation();
-                    const index = parseInt(button.getAttribute('data-index'), 10);
-                    if (button.dataset.attachment === 'true') {
-                        openAttachmentModal(index);
-                    } else {
+            if (currentEmailViewMode === 'table') {
+                // Click on row or "Read more" opens full email modal
+                document.querySelectorAll('.email-row').forEach(row => {
+                    row.addEventListener('click', (evt) => {
+                        // Avoid double-handling if clicking Read more (handled separately)
+                        if (evt.target && evt.target.classList.contains('email-read-more')) {
+                            return;
+                        }
+                        const index = parseInt(row.getAttribute('data-index'), 10);
+                        // In table view, row click should open the same Task modal
+                        // as the "Task" button (detailed task-style view).
                         openTaskModal(index);
-                    }
+                    });
                 });
-            });
+                document.querySelectorAll('.email-read-more').forEach(link => {
+                    link.addEventListener('click', (evt) => {
+                        evt.preventDefault();
+                        evt.stopPropagation();
+                        const index = parseInt(link.getAttribute('data-index'), 10);
+                        // Open the same Task modal as the "Task" button, per requirement
+                        openTaskModal(index);
+                    });
+                });
+                // Attachments in table view are direct download links; no Task button in this column.
+            } else {
+                document.querySelectorAll('.email-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const index = parseInt(item.getAttribute('data-index'), 10);
+                        openEmailModal(index);
+                    });
+                });
+
+                document.querySelectorAll('.email-action-button').forEach(button => {
+                    button.addEventListener('click', (evt) => {
+                        evt.stopPropagation();
+                        const index = parseInt(button.getAttribute('data-index'), 10);
+                        if (button.dataset.attachment === 'true') {
+                            openAttachmentModal(index);
+                        } else {
+                            openTaskModal(index);
+                        }
+                    });
+                });
+            }
         }
 
         function openEmailModal(index) {

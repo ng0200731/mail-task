@@ -5878,13 +5878,28 @@
                 .then(data => {
                     if (data.error) {
                         emailList.innerHTML = `<div class="message error">Error: ${escapeHtml(data.error)}</div>`;
+                        hideEmailLoadingOverlay();
                     } else {
-                        const list = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
-                        const uniqueList = deduplicateEmails(list);
-                        cacheEmails('lcf', uniqueList);
-                        displayEmails(uniqueList, { provider: 'lcf' });
+                        // After fetching new emails and saving to database, reload ALL emails
+                        // from the database (including old ones) to show the complete list
+                        return fetchStoredEmails('lcf')
+                            .then(allStoredEmails => {
+                                const uniqueList = deduplicateEmails(allStoredEmails);
+                                cacheEmails('lcf', uniqueList);
+                                displayEmails(uniqueList, { provider: 'lcf', cached: false });
+                                currentProvider = 'lcf';
+                                hideEmailLoadingOverlay();
+                            })
+                            .catch(error => {
+                                console.error('Failed to reload stored emails:', error);
+                                // Fallback: show the newly fetched emails if reload fails
+                                const list = (data.emails || []).map(item => ensureEmailSequence({ ...item }));
+                                const uniqueList = deduplicateEmails(list);
+                                cacheEmails('lcf', uniqueList);
+                                displayEmails(uniqueList, { provider: 'lcf' });
+                                hideEmailLoadingOverlay();
+                            });
                     }
-                    hideEmailLoadingOverlay();
                 })
                 .catch(error => {
                     emailList.innerHTML = `<div class="message error">Error fetching emails: ${escapeHtml(error.message)}</div>`;

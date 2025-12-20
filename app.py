@@ -83,6 +83,14 @@ def login():
     return render_template('login.html')
 
 
+@app.route('/favicon.ico')
+def favicon():
+    """Serve favicon"""
+    # Return a simple 204 No Content to prevent 404 errors
+    # You can replace this with an actual favicon file if needed
+    return '', 204
+
+
 @app.route('/')
 def index():
     """Main page - requires login"""

@@ -1159,6 +1159,16 @@
 
         .customer-table th {
             background-color: #f0f0f0;
+            color: #000000;
+        }
+        
+        /* Override any color inheritance for filter inputs */
+        .customer-table thead tr:nth-child(2) th {
+            color: #000000 !important;
+        }
+        
+        .customer-table thead tr:nth-child(2) th * {
+            color: #000000 !important;
         }
 
         .customer-filter-input {
@@ -1166,6 +1176,63 @@
             box-sizing: border-box;
             padding: 3px 4px;
             font-size: 12px;
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 1px solid #cccccc !important;
+            -webkit-text-fill-color: #000000 !important;
+            -webkit-opacity: 1 !important;
+            opacity: 1 !important;
+        }
+        
+        .customer-table th .customer-filter-input,
+        .customer-table thead th .customer-filter-input,
+        .customer-table thead tr:nth-child(2) th .customer-filter-input {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 1px solid #cccccc !important;
+            -webkit-text-fill-color: #000000 !important;
+            -webkit-opacity: 1 !important;
+            opacity: 1 !important;
+        }
+        
+        .customer-filter-input:focus {
+            outline: none;
+            border-color: #000000 !important;
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important;
+            -webkit-opacity: 1 !important;
+            opacity: 1 !important;
+        }
+        
+        .customer-filter-input::placeholder {
+            color: #999999 !important;
+            opacity: 1 !important;
+        }
+        
+        input.customer-filter-input[type="text"] {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            -webkit-text-fill-color: #000000 !important;
+        }
+        
+        /* Fix for browser autofill */
+        .customer-filter-input:-webkit-autofill,
+        .customer-filter-input:-webkit-autofill:hover,
+        .customer-filter-input:-webkit-autofill:focus,
+        .customer-filter-input:-webkit-autofill:active {
+            -webkit-text-fill-color: #000000 !important;
+            -webkit-box-shadow: 0 0 0px 1000px #ffffff inset !important;
+            box-shadow: 0 0 0px 1000px #ffffff inset !important;
+            color: #000000 !important;
+            background-color: #ffffff !important;
+        }
+        
+        /* Ensure input text is always visible */
+        .customer-table th input[type="text"].customer-filter-input {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            -webkit-text-fill-color: #000000 !important;
         }
 
         /* Resizable column handle */
@@ -1177,6 +1244,19 @@
             height: 100%;
             cursor: col-resize;
             user-select: none;
+            z-index: 1;
+            pointer-events: auto;
+        }
+        
+        /* Ensure filter inputs are above resizers */
+        .customer-table thead tr:nth-child(2) th {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .customer-table thead tr:nth-child(2) th input {
+            position: relative;
+            z-index: 3;
         }
 
         /* Sticky headers for customer and task list tables */
@@ -1191,7 +1271,46 @@
 
         .customer-table thead tr:nth-child(2) th {
             top: 40px; /* approximate height of first header row */
-            background-color: #ffffff;
+            background-color: #ffffff !important;
+            color: #000000 !important;
+        }
+        
+        .customer-table thead tr:nth-child(2) th input,
+        .customer-table thead tr:nth-child(2) th input[type="text"],
+        .customer-table thead tr:nth-child(2) th .customer-filter-input {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            -webkit-text-fill-color: #000000 !important;
+            opacity: 1 !important;
+        }
+        
+        /* Force text color for all input states */
+        .customer-table thead tr:nth-child(2) th input:focus,
+        .customer-table thead tr:nth-child(2) th input:active,
+        .customer-table thead tr:nth-child(2) th input:hover {
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important;
+        }
+        
+        /* Override placeholder colors */
+        .customer-table thead tr:nth-child(2) th input::placeholder {
+            color: #999999 !important;
+            opacity: 1 !important;
+        }
+        
+        .customer-table thead tr:nth-child(2) th input::-webkit-input-placeholder {
+            color: #999999 !important;
+            opacity: 1 !important;
+        }
+        
+        .customer-table thead tr:nth-child(2) th input::-moz-placeholder {
+            color: #999999 !important;
+            opacity: 1 !important;
+        }
+        
+        .customer-table thead tr:nth-child(2) th input:-ms-input-placeholder {
+            color: #999999 !important;
+            opacity: 1 !important;
         }
 
         /* Sticky header + filter row for task list */
@@ -2492,7 +2611,6 @@
                         [{ 'indent': '-1'}, { 'indent': '+1' }],
                         [{ 'align': [] }],
                         ['link', 'image'],
-                        [{ 'table': true }],
                         ['clean']
                     ]
                 }
@@ -2512,7 +2630,6 @@
                         [{ 'indent': '-1'}, { 'indent': '+1' }],
                         [{ 'align': [] }],
                         ['link', 'image'],
-                        [{ 'table': true }],
                         ['clean']
                     ]
                 }
@@ -2523,8 +2640,9 @@
         const customerListSection = document.getElementById('customer-list-section');
         const customerTableBody = document.getElementById('customer-table-body');
         const customerEmptyMessage = document.getElementById('customer-empty');
-        let currentEmails = [];
-        let allEmails = [];
+        // Keep email state resilient across script re-runs and avoid TDZ errors
+        var currentEmails = window.currentEmails || [];
+        var allEmails = window.allEmails || [];
         let currentProvider = null;
         // Default to table view for detailed Receive Mail display
         let currentEmailViewMode = 'table'; // 'card' or 'table'
@@ -2592,7 +2710,8 @@
             let showingAllCustomers = false;
             
             function selectCustomer(customer) {
-                input.value = customer.name || customer.email_suffix || '';
+                // Use customer.name (from create customer) as the primary display value
+                input.value = customer.name || customer.company_name || customer.email_suffix || '';
                 valueInput.value = customer.email_suffix || '';
                 dropdown.classList.remove('show');
                 highlightedIndex = -1;
@@ -2815,7 +2934,39 @@
                 const grouped = groupEmailsByDate(emails);
                 Object.entries(grouped).forEach(([dateKey, list]) => {
                     const storageKey = `emails:${provider}:${dateKey}`;
-                    localStorage.setItem(storageKey, JSON.stringify({ date: dateKey, emails: list }));
+                    try {
+                        // Limit the number of emails cached to prevent QuotaExceededError
+                        // Only cache last 50 emails per day to avoid exceeding localStorage quota
+                        const limitedList = list.slice(-50);
+                        const dataToStore = JSON.stringify({ date: dateKey, emails: limitedList });
+                        // Check if data is too large (localStorage limit is usually 5-10MB)
+                        if (dataToStore.length > 4 * 1024 * 1024) {
+                            console.warn(`Email cache for ${dateKey} is too large, skipping cache`);
+                            return;
+                        }
+                        localStorage.setItem(storageKey, dataToStore);
+                    } catch (storageError) {
+                        // If storage fails, try to clear old data and retry
+                        if (storageError.name === 'QuotaExceededError') {
+                            console.warn(`localStorage quota exceeded for ${storageKey}, clearing old cache`);
+                            // Clear old email cache entries
+                            try {
+                                for (let i = 0; i < localStorage.length; i++) {
+                                    const key = localStorage.key(i);
+                                    if (key && key.startsWith('emails:')) {
+                                        localStorage.removeItem(key);
+                                    }
+                                }
+                                // Retry with limited data
+                                const limitedList = list.slice(-20);
+                                localStorage.setItem(storageKey, JSON.stringify({ date: dateKey, emails: limitedList }));
+                            } catch (clearError) {
+                                console.error('Failed to clear and retry cache:', clearError);
+                            }
+                        } else {
+                            console.error(`Failed to cache emails for ${dateKey}:`, storageError);
+                        }
+                    }
                 });
                 localStorage.setItem('lastEmailProvider', provider);
             } catch (error) {
@@ -3050,20 +3201,31 @@
             if (!address || !address.includes('@')) return null;
             const addressLower = address.toLowerCase();
             
+            // Extract domain from email address
+            const domain = address.split('@')[1]?.toLowerCase();
+            if (!domain) return null;
+            
             // Try to find by full email address first (new format)
             let match = customerCache.find(customer => {
-                const storedEmail = (customer.email_suffix || '').toLowerCase();
+                const storedEmail = (customer.email_suffix || '').toLowerCase().trim();
                 return storedEmail === addressLower;
             });
             
             if (match) return match;
             
-            // Fallback: try to find by domain suffix (backward compatibility)
-            const domain = '@' + address.split('@')[1].toLowerCase();
+            // Try to find by domain with @ prefix (old format: @domain.com)
+            const domainWithAt = '@' + domain;
             match = customerCache.find(customer => {
-                const storedEmail = (customer.email_suffix || '').toLowerCase();
-                // Check if stored email is old format (starts with @) or matches domain
-                return storedEmail === domain || (storedEmail.startsWith('@') && storedEmail === domain);
+                const storedEmail = (customer.email_suffix || '').toLowerCase().trim();
+                return storedEmail === domainWithAt;
+            });
+            
+            if (match) return match;
+            
+            // Try to find by domain without @ prefix (new format: domain.com)
+            match = customerCache.find(customer => {
+                const storedEmail = (customer.email_suffix || '').toLowerCase().trim();
+                return storedEmail === domain;
             });
             
             return match || null;
@@ -3923,7 +4085,6 @@
                                 [{ 'indent': '-1'}, { 'indent': '+1' }],
                                 [{ 'align': [] }],
                                 ['link', 'image'],
-                                [{ 'table': true }],
                                 ['clean']
                             ]
                         }
@@ -6438,16 +6599,61 @@
         function extractEmailBodyText(email) {
             // Prefer plain text if available
             if (email && email.plain_body) {
-                return email.plain_body.toString();
+                let text = email.plain_body.toString();
+                // Strip any remaining HTML tags from plain_body (in case it contains HTML)
+                text = text.replace(/<[^>]*>/g, '');
+                // Decode HTML entities
+                const div = document.createElement('div');
+                div.innerHTML = text;
+                text = div.textContent || div.innerText || text;
+                return text.trim();
             }
             // Fallback: strip HTML tags from html_body
             if (email && email.html_body) {
+                let html = email.html_body.toString();
+                // Remove DOCTYPE, html, head, body tags and their content if present
+                html = html.replace(/<!DOCTYPE[^>]*>/gi, '');
+                html = html.replace(/<html[^>]*>/gi, '');
+                html = html.replace(/<\/html>/gi, '');
+                html = html.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
+                html = html.replace(/<body[^>]*>/gi, '');
+                html = html.replace(/<\/body>/gi, '');
+                // Remove all remaining HTML tags
+                html = html.replace(/<[^>]*>/g, '');
+                // Decode HTML entities
                 const div = document.createElement('div');
-                div.innerHTML = email.html_body;
-                return div.textContent || div.innerText || '';
+                div.innerHTML = html;
+                const text = div.textContent || div.innerText || html;
+                return text.trim();
+            }
+            // Check if content field exists (some email formats use this)
+            if (email && email.content) {
+                let content = email.content.toString();
+                // Remove DOCTYPE, html, head, body tags and their content if present
+                content = content.replace(/<!DOCTYPE[^>]*>/gi, '');
+                content = content.replace(/<html[^>]*>/gi, '');
+                content = content.replace(/<\/html>/gi, '');
+                content = content.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
+                content = content.replace(/<body[^>]*>/gi, '');
+                content = content.replace(/<\/body>/gi, '');
+                // Remove all remaining HTML tags
+                content = content.replace(/<[^>]*>/g, '');
+                // Decode HTML entities
+                const div = document.createElement('div');
+                div.innerHTML = content;
+                const text = div.textContent || div.innerText || content;
+                return text.trim();
             }
             // Last resort: use preview
-            return (email && email.preview) ? email.preview.toString() : '';
+            if (email && email.preview) {
+                let preview = email.preview.toString();
+                // Strip any HTML tags from preview
+                preview = preview.replace(/<[^>]*>/g, '');
+                const div = document.createElement('div');
+                div.innerHTML = preview;
+                return (div.textContent || div.innerText || preview).trim();
+            }
+            return '';
         }
 
         function truncateWords(text, maxWords) {
@@ -6464,14 +6670,16 @@
             const layout = profile.emailLayout || {};
             const date = Number(layout.date);
             const name = Number(layout.name);
+            const title = Number(layout.title);
             const content = Number(layout.content);
             const attachments = Number(layout.attachments);
             // Fallback defaults; values do not need to sum to 100 exactly.
             return {
-                date: !Number.isNaN(date) && date > 0 ? date : 15,
-                name: !Number.isNaN(name) && name > 0 ? name : 30,
+                date: !Number.isNaN(date) && date > 0 ? date : 12,
+                name: !Number.isNaN(name) && name > 0 ? name : 20,
+                title: !Number.isNaN(title) && title > 0 ? title : 25,
                 content: !Number.isNaN(content) && content > 0 ? content : 15,
-                attachments: !Number.isNaN(attachments) && attachments > 0 ? attachments : 40
+                attachments: !Number.isNaN(attachments) && attachments > 0 ? attachments : 28
             };
         }
 
@@ -6482,6 +6690,7 @@
             profile.emailLayout = {
                 date: layout.date,
                 name: layout.name,
+                title: layout.title,
                 content: layout.content,
                 attachments: layout.attachments
             };
@@ -6496,20 +6705,52 @@
             return layout;
         }
 
+        function updateFilterStatus() {
+            const statusElement = document.getElementById('email-filter-status');
+            if (!statusElement) return;
+            
+            const dateInput = document.getElementById('email-filter-date');
+            const nameInput = document.getElementById('email-filter-name');
+            const contentInput = document.getElementById('email-filter-content');
+            const attachmentsInput = document.getElementById('email-filter-attachments');
+            
+            const dateVal = (dateInput && dateInput.value || '').trim();
+            const nameVal = (nameInput && nameInput.value || '').trim();
+            const contentVal = (contentInput && contentInput.value || '').trim();
+            const attachVal = (attachmentsInput && attachmentsInput.value || '').trim();
+            
+            const filters = [];
+            if (dateVal) filters.push(`Date: "${escapeHtml(dateVal)}"`);
+            if (nameVal) filters.push(`Name: "${escapeHtml(nameVal)}"`);
+            if (contentVal) filters.push(`Content: "${escapeHtml(contentVal)}"`);
+            if (attachVal) filters.push(`Attachments: "${escapeHtml(attachVal)}"`);
+            
+            if (filters.length > 0) {
+                statusElement.textContent = `Active filters: ${filters.join(' ')}`;
+            } else {
+                statusElement.textContent = 'No active filters';
+            }
+        }
+
         function filterEmailTable() {
             const emailList = document.getElementById('email-list');
             if (!emailList) return;
             const base = allEmails && allEmails.length ? allEmails : currentEmails;
             const dateInput = document.getElementById('email-filter-date');
             const nameInput = document.getElementById('email-filter-name');
+            const titleInput = document.getElementById('email-filter-title');
             const contentInput = document.getElementById('email-filter-content');
             const attachmentsInput = document.getElementById('email-filter-attachments');
             const dateQuery = (dateInput && dateInput.value || '').trim().toLowerCase();
             const nameQuery = (nameInput && nameInput.value || '').trim().toLowerCase();
+            const titleQuery = (titleInput && titleInput.value || '').trim().toLowerCase();
             const contentQuery = (contentInput && contentInput.value || '').trim().toLowerCase();
             const attachQuery = (attachmentsInput && attachmentsInput.value || '').trim().toLowerCase();
+            
+            // Update filter status display
+            updateFilterStatus();
 
-            if (!dateQuery && !nameQuery && !contentQuery && !attachQuery) {
+            if (!dateQuery && !nameQuery && !titleQuery && !contentQuery && !attachQuery) {
                 const isCached = emailList.dataset && emailList.dataset.cached === 'true';
                 displayEmails(base, { provider: currentProvider, cached: isCached, filtered: true });
                 return;
@@ -6520,11 +6761,13 @@
                 const dateVal = (email.date || '').toString().toLowerCase();
                 const fromVal = (email.from || '').toString().toLowerCase();
                 const displayName = getEmailDisplayName(email.from || '').toLowerCase();
+                const subjectVal = (email.subject || '').toString().toLowerCase();
                 const bodyText = extractEmailBodyText(email).toLowerCase();
                 const attachments = Array.isArray(email.attachments) ? email.attachments : [];
 
                 if (dateQuery && !dateVal.includes(dateQuery)) return false;
                 if (nameQuery && !(fromVal.includes(nameQuery) || displayName.includes(nameQuery))) return false;
+                if (titleQuery && !subjectVal.includes(titleQuery)) return false;
                 if (contentQuery && !bodyText.includes(contentQuery)) return false;
                 if (attachQuery) {
                     const match = attachments.some(att => {
@@ -6558,6 +6801,27 @@
             emailList.dataset.cached = isCached ? 'true' : 'false';
             emailList.dataset.viewMode = currentEmailViewMode;
 
+            // Preserve filter input values before regenerating the table
+            const savedFilterValues = {
+                date: '',
+                name: '',
+                title: '',
+                content: '',
+                attachments: ''
+            };
+            if (currentEmailViewMode === 'table') {
+                const dateInput = document.getElementById('email-filter-date');
+                const nameInput = document.getElementById('email-filter-name');
+                const titleInput = document.getElementById('email-filter-title');
+                const contentInput = document.getElementById('email-filter-content');
+                const attachmentsInput = document.getElementById('email-filter-attachments');
+                if (dateInput) savedFilterValues.date = dateInput.value || '';
+                if (nameInput) savedFilterValues.name = nameInput.value || '';
+                if (titleInput) savedFilterValues.title = titleInput.value || '';
+                if (contentInput) savedFilterValues.content = contentInput.value || '';
+                if (attachmentsInput) savedFilterValues.attachments = attachmentsInput.value || '';
+            }
+
             if (currentEmailViewMode === 'table') {
                 // Table view for all providers
                 const layout = getEmailLayoutFromProfile();
@@ -6573,6 +6837,10 @@
                                     Name
                                     <span class="email-col-resizer" data-column="name"></span>
                                 </th>
+                                <th style="width: ${layout.title}%; min-width: 120px;" data-column="title">
+                                    Title
+                                    <span class="email-col-resizer" data-column="title"></span>
+                                </th>
                                 <th style="width: ${layout.content}%; min-width: 120px;" data-column="content">
                                     Content
                                     <span class="email-col-resizer" data-column="content"></span>
@@ -6583,16 +6851,22 @@
                                 </th>
                             </tr>
                             <tr>
-                                <th><input id="email-filter-date" class="customer-filter-input" type="text" placeholder="Filter date" oninput="filterEmailTable()"></th>
-                                <th><input id="email-filter-name" class="customer-filter-input" type="text" placeholder="Filter name" oninput="filterEmailTable()"></th>
-                                <th><input id="email-filter-content" class="customer-filter-input" type="text" placeholder="Filter content" oninput="filterEmailTable()"></th>
-                                <th><input id="email-filter-attachments" class="customer-filter-input" type="text" placeholder="Filter attachments" oninput="filterEmailTable()"></th>
+                                <th><input id="email-filter-date" class="customer-filter-input" type="text" placeholder="Filter date" value="${escapeHtml(savedFilterValues.date)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
+                                <th><input id="email-filter-name" class="customer-filter-input" type="text" placeholder="Filter name" value="${escapeHtml(savedFilterValues.name)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
+                                <th><input id="email-filter-title" class="customer-filter-input" type="text" placeholder="Filter title" value="${escapeHtml(savedFilterValues.title)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
+                                <th><input id="email-filter-content" class="customer-filter-input" type="text" placeholder="Filter content" value="${escapeHtml(savedFilterValues.content)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
+                                <th><input id="email-filter-attachments" class="customer-filter-input" type="text" placeholder="Filter attachments" value="${escapeHtml(savedFilterValues.attachments)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
+                            </tr>
+                            <tr class="filter-status-row" style="background-color: #f5f5f5; font-size: 12px; color: #666;">
+                                <th colspan="5" style="text-align: left; padding: 8px 12px; font-weight: normal;">
+                                    <span id="email-filter-status">${(savedFilterValues.date || savedFilterValues.name || savedFilterValues.title || savedFilterValues.content || savedFilterValues.attachments) ? `Active filters: ${savedFilterValues.date ? `Date: "${escapeHtml(savedFilterValues.date)}"` : ''} ${savedFilterValues.name ? `Name: "${escapeHtml(savedFilterValues.name)}"` : ''} ${savedFilterValues.title ? `Title: "${escapeHtml(savedFilterValues.title)}"` : ''} ${savedFilterValues.content ? `Content: "${escapeHtml(savedFilterValues.content)}"` : ''} ${savedFilterValues.attachments ? `Attachments: "${escapeHtml(savedFilterValues.attachments)}"` : ''}` : 'No active filters'}</span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
                             ${currentEmails.length === 0 ? `
                                 <tr>
-                                    <td colspan="4" style="text-align: center; padding: 20px; color: #666; font-style: italic;">
+                                    <td colspan="5" style="text-align: center; padding: 20px; color: #666; font-style: italic;">
                                         No emails found for this provider.
                                     </td>
                                 </tr>
@@ -6600,6 +6874,7 @@
                                 const visibleAttachments = getVisibleEmailAttachments(email);
                                 const hasVisibleAttachments = Array.isArray(visibleAttachments) && visibleAttachments.length > 0;
                                 const displayName = getEmailDisplayName(email.from || '');
+                                const subject = email.subject || '';
                                 const bodyText = extractEmailBodyText(email);
                                 // Use up to 50 words for preview; still open full Task modal on click
                                 const { preview, truncated } = truncateWords(bodyText, 50);
@@ -6611,10 +6886,12 @@
                                     `).join('')
                                     : '<span style="color: #666; font-style: italic;">No attachments</span>';
                                 const safePreview = escapeHtml(preview || '');
+                                const safeSubject = escapeHtml(subject || '');
                                 return `
                                     <tr class="email-row" data-index="${index}">
                                         <td>${escapeHtml(formatEmailDate(email.date || ''))}</td>
                                         <td>${escapeHtml(displayName || '')}</td>
+                                        <td>${safeSubject || '<span style="color: #999; font-style: italic;">No subject</span>'}</td>
                                         <td>
                                             <div class="email-preview-table">
                                                 ${safePreview}${truncated ? '… ' : ''}
@@ -6697,6 +6974,90 @@
                 // Attachments in table view are direct download links; no Task button in this column.
                 // Enable column resizing
                 setupEmailColumnResizers();
+                
+                // Force set input styles to ensure text is visible
+                setTimeout(() => {
+                    const filterInputs = document.querySelectorAll('#email-filter-date, #email-filter-name, #email-filter-title, #email-filter-content, #email-filter-attachments');
+                    filterInputs.forEach(input => {
+                        if (input) {
+                            // DO NOT remove style attribute - keep the inline styles we set in HTML
+                            // Just add/override with additional properties
+                            
+                            // Set all style properties to ensure visibility using setProperty with important
+                            input.style.setProperty('color', '#000000', 'important');
+                            input.style.setProperty('background-color', '#ffffff', 'important');
+                            input.style.setProperty('border', '1px solid #cccccc', 'important');
+                            input.style.setProperty('-webkit-text-fill-color', '#000000', 'important');
+                            input.style.setProperty('opacity', '1', 'important');
+                            input.style.setProperty('z-index', '10', 'important');
+                            input.style.setProperty('position', 'relative', 'important');
+                            input.style.setProperty('visibility', 'visible', 'important');
+                            input.style.setProperty('display', 'block', 'important');
+                            
+                            // Force text color using multiple methods
+                            input.style.color = '#000000';
+                            input.style.webkitTextFillColor = '#000000';
+                            
+                            // Ensure input is enabled
+                            input.disabled = false;
+                            input.readOnly = false;
+                            
+                            // Add event listener to debug and force style on input
+                            const inputHandler = function(e) {
+                                const val = e.target.value;
+                                const computedColor = window.getComputedStyle(e.target).color;
+                                const computedFillColor = window.getComputedStyle(e.target).webkitTextFillColor || window.getComputedStyle(e.target).getPropertyValue('-webkit-text-fill-color');
+                                console.log('Input value changed:', val, 'Length:', val.length, 'Computed color:', computedColor, 'Fill color:', computedFillColor);
+                                
+                                // Force style again on every input - use direct assignment AND setProperty
+                                e.target.style.color = '#000000';
+                                e.target.style.webkitTextFillColor = '#000000';
+                                e.target.style.setProperty('color', '#000000', 'important');
+                                e.target.style.setProperty('-webkit-text-fill-color', '#000000', 'important');
+                                
+                                // Update filter status display
+                                updateFilterStatus();
+                                
+                                // If still not visible, try setting a test background
+                                if (val.length > 0 && (computedColor === 'rgb(255, 255, 255)' || computedColor === 'rgba(0, 0, 0, 0)' || computedFillColor === 'rgb(255, 255, 255)')) {
+                                    console.warn('Text color appears to be white/transparent, forcing black');
+                                    e.target.style.color = '#ff0000'; // Red for testing
+                                    setTimeout(() => {
+                                        e.target.style.color = '#000000';
+                                        e.target.style.setProperty('color', '#000000', 'important');
+                                    }, 1000);
+                                }
+                            };
+                            
+                            // Remove old listener if exists and add new one
+                            input.removeEventListener('input', inputHandler);
+                            input.addEventListener('input', inputHandler);
+                            
+                            // Test if input is working on focus
+                            const focusHandler = function(e) {
+                                console.log('Input focused:', e.target.id, 'Current value:', e.target.value);
+                                e.target.style.color = '#000000';
+                                e.target.style.webkitTextFillColor = '#000000';
+                                e.target.style.setProperty('color', '#000000', 'important');
+                                e.target.style.setProperty('background-color', '#ffffff', 'important');
+                                e.target.style.setProperty('-webkit-text-fill-color', '#000000', 'important');
+                            };
+                            
+                            input.removeEventListener('focus', focusHandler);
+                            input.addEventListener('focus', focusHandler);
+                            
+                            // Test on keydown
+                            const keydownHandler = function(e) {
+                                console.log('Key pressed:', e.key, 'in input:', e.target.id, 'Value will be:', e.target.value + e.key);
+                            };
+                            
+                            input.removeEventListener('keydown', keydownHandler);
+                            input.addEventListener('keydown', keydownHandler);
+                        }
+                    });
+                    // Update filter status display after inputs are set up
+                    updateFilterStatus();
+                }, 100);
             } else {
                 document.querySelectorAll('.email-item').forEach(item => {
                     item.addEventListener('click', () => {
@@ -7245,23 +7606,29 @@
             const populateCustomerAutocomplete = () => {
                 if (!taskCustomerSelect) return;
                 
+                // Try to find and select matching customer BEFORE setting up autocomplete
+                const match = findCustomerByEmail(email.from || '');
+                
                 // Setup autocomplete
                 setupAutocomplete('task-customer-select', 'task-customer-dropdown', 'task-customer-value', 'task-email');
                 
-                // Try to find and select matching customer
-                const match = findCustomerByEmail(email.from || '');
+                // Set the customer value AFTER autocomplete is set up
                 if (match) {
-                    taskCustomerSelect.value = match.name || match.email_suffix || '';
+                    // Use customer.name (from create customer) as the primary display value
+                    // Set both the display input and the hidden value input
+                    taskCustomerSelect.value = match.name || match.company_name || match.email_suffix || '';
                     const valueInput = document.getElementById('task-customer-value');
                     if (valueInput) {
                         valueInput.value = match.email_suffix || '';
                     }
                     // Auto-fill email
-                    const storedEmail = (match.email_suffix || '').trim();
-                    if (storedEmail.includes('@')) {
-                        taskEmailInput.value = storedEmail;
-                    } else {
-                        taskEmailInput.value = extractEmailAddress(email.from || '');
+                    if (taskEmailInput) {
+                        const storedEmail = (match.email_suffix || '').trim();
+                        if (storedEmail.includes('@')) {
+                            taskEmailInput.value = storedEmail;
+                        } else {
+                            taskEmailInput.value = extractEmailAddress(email.from || '');
+                        }
                     }
                 } else {
                     taskCustomerSelect.value = '';
@@ -7269,7 +7636,9 @@
                     if (valueInput) {
                         valueInput.value = '';
                     }
-                    taskEmailInput.value = extractEmailAddress(email.from || '');
+                    if (taskEmailInput) {
+                        taskEmailInput.value = extractEmailAddress(email.from || '');
+                    }
                 }
             };
 

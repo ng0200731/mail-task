@@ -110,10 +110,22 @@ def initialize_database():
         """)
         cursor.execute("PRAGMA table_info(emails)")
         email_columns = {row['name'] for row in cursor.fetchall()}
+        # Migrate existing emails table to add new columns if they don't exist
+        if 'subject' not in email_columns:
+            try:
+                cursor.execute("ALTER TABLE emails ADD COLUMN subject TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists or error occurred
         if 'attachments' not in email_columns:
-            cursor.execute("ALTER TABLE emails ADD COLUMN attachments TEXT")
+            try:
+                cursor.execute("ALTER TABLE emails ADD COLUMN attachments TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
         if 'created_by' not in email_columns:
-            cursor.execute("ALTER TABLE emails ADD COLUMN created_by TEXT")
+            try:
+                cursor.execute("ALTER TABLE emails ADD COLUMN created_by TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
         # Update existing records to set created_by
         cursor.execute("UPDATE emails SET created_by = 'eric.brilliant@gmail.com' WHERE created_by IS NULL")
         

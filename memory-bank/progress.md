@@ -111,6 +111,13 @@
     - ✅ 更新 `app.py` 改為從 `models.customer_model` 匯入
     - ✅ 驗證無 linting 錯誤，所有引用正常運作（2 處使用這些函數）
 
+### 2025-12-19: 郵件表格添加 Subject/Title 列
+- ✅ 數據庫結構更新：添加 `subject` 字段遷移邏輯到 `utils/db_utils.py`
+- ✅ 前端表格視圖：添加 Title 列（Date, Name, **Title**, Content, Attachments）
+- ✅ 過濾功能：添加 Title 過濾器輸入框和過濾邏輯
+- ✅ 布局系統：更新布局函數支持 title 列寬設定
+- ✅ 表格渲染：更新 `displayEmails()` 顯示 subject 內容
+
 ## 待開始
 
 - ⏳ 動作按鈕實作（Library / Quotation / ERP Status）

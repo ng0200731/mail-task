@@ -589,6 +589,20 @@ mailtask/
 - **原因**: 與現有的 profile 系統整合，不需要額外的後端 API
 - **影響**: `saveEmailLayoutToProfile()` 函數
 
+### 2025-12-19: 郵件表格添加 Subject/Title 列
+- **變更**: 在郵件表格視圖中添加 Title 列（顯示郵件主旨）
+- **數據庫**: 添加 `subject` 字段到 `emails` 表（已包含在表定義中，添加遷移邏輯）
+- **前端**: 表格列順序更新為：Date, Name, **Title**, Content, Attachments（5列）
+- **功能**: 
+  - 添加 Title 過濾器輸入框
+  - 更新過濾邏輯支持按 subject 過濾
+  - 更新布局系統支持 title 列寬設定（默認：Date 12%, Name 20%, Title 25%, Content 15%, Attachments 28%）
+- **影響**: 
+  - `getEmailLayoutFromProfile()` 和 `saveEmailLayoutToProfile()` 函數
+  - `filterEmailTable()` 過濾邏輯
+  - `displayEmails()` 表格渲染
+  - `utils/db_utils.py` 數據庫遷移邏輯
+
 ## 待解決問題
 
 - [ ] `app.py` 需要模組化（目前 4000+ 行）

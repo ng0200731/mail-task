@@ -2730,6 +2730,22 @@
             }
             
             function showAllCustomers() {
+                // Check if this is the task customer select and no match was found
+                const isTaskCustomerSelect = input.id === 'task-customer-select';
+                const noMatch = isTaskCustomerSelect && input.dataset.noMatch === 'true';
+                
+                if (noMatch) {
+                    // Show warning message when no matching customer found
+                    dropdown.innerHTML = `
+                        <div class="autocomplete-item" style="color: red; cursor: default; pointer-events: none; padding: 10px; text-align: center; font-weight: bold;">
+                            no information in create customer
+                        </div>
+                    `;
+                    dropdown.classList.add('show');
+                    highlightedIndex = -1;
+                    return;
+                }
+                
                 if (!customerCache || customerCache.length === 0) return;
                 filteredCustomers = customerCache;
                 showingAllCustomers = true;
@@ -2756,6 +2772,10 @@
                 if (query === '') {
                     showAllCustomers();
                 } else {
+                    // Clear noMatch flag if user starts typing
+                    if (input.dataset.noMatch === 'true') {
+                        delete input.dataset.noMatch;
+                    }
                     filteredCustomers = filterCustomers(query);
                     renderAutocompleteDropdown(dropdown, filteredCustomers, selectCustomer);
                 }
@@ -2764,6 +2784,10 @@
             input.addEventListener('input', (e) => {
                 const query = e.target.value.trim();
                 showingAllCustomers = false;
+                // Clear noMatch flag if user starts typing
+                if (input.dataset.noMatch === 'true') {
+                    delete input.dataset.noMatch;
+                }
                 if (query === '') {
                     filteredCustomers = customerCache || [];
                 } else {
@@ -3226,6 +3250,22 @@
             match = customerCache.find(customer => {
                 const storedEmail = (customer.email_suffix || '').toLowerCase().trim();
                 return storedEmail === domain;
+            });
+            
+            if (match) return match;
+            
+            // Try to find by domain match when email_suffix is a full email address
+            // Example: email_suffix = "1@trimco-group.com", email = "ying.chow@trimco-group.com"
+            // Both have the same domain "trimco-group.com", so they should match
+            match = customerCache.find(customer => {
+                const storedEmail = (customer.email_suffix || '').toLowerCase().trim();
+                // If stored email is a full email address (contains @)
+                if (storedEmail.includes('@')) {
+                    const storedDomain = storedEmail.split('@')[1]?.toLowerCase();
+                    // Match if domains are the same
+                    return storedDomain === domain;
+                }
+                return false;
             });
             
             return match || null;
@@ -7606,6 +7646,9 @@
             const populateCustomerAutocomplete = () => {
                 if (!taskCustomerSelect) return;
                 
+                // Clear any previous noMatch flag
+                delete taskCustomerSelect.dataset.noMatch;
+                
                 // Try to find and select matching customer BEFORE setting up autocomplete
                 const match = findCustomerByEmail(email.from || '');
                 
@@ -7614,9 +7657,9 @@
                 
                 // Set the customer value AFTER autocomplete is set up
                 if (match) {
-                    // Use customer.name (from create customer) as the primary display value
+                    // Prioritize company_name over name (as per requirement)
                     // Set both the display input and the hidden value input
-                    taskCustomerSelect.value = match.name || match.company_name || match.email_suffix || '';
+                    taskCustomerSelect.value = match.company_name || match.name || match.email_suffix || '';
                     const valueInput = document.getElementById('task-customer-value');
                     if (valueInput) {
                         valueInput.value = match.email_suffix || '';
@@ -7631,6 +7674,7 @@
                         }
                     }
                 } else {
+                    // No matching customer found
                     taskCustomerSelect.value = '';
                     const valueInput = document.getElementById('task-customer-value');
                     if (valueInput) {
@@ -7639,6 +7683,8 @@
                     if (taskEmailInput) {
                         taskEmailInput.value = extractEmailAddress(email.from || '');
                     }
+                    // Store flag to show warning in dropdown
+                    taskCustomerSelect.dataset.noMatch = 'true';
                 }
             };
 

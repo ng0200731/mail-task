@@ -1273,6 +1273,22 @@
             top: 40px; /* approximate height of first header row */
             background-color: #ffffff !important;
             color: #000000 !important;
+            padding: 6px 8px;
+            min-height: 38px;
+        }
+
+        /* Force the email filter row to stay visible even if other styles interfere */
+        .email-filter-row {
+            display: table-row !important;
+            position: sticky;
+            top: 40px;
+            background-color: #fafafa !important;
+            z-index: 5;
+        }
+
+        .email-filter-row th {
+            background-color: #fafafa !important;
+            height: 38px;
         }
         
         .customer-table thead tr:nth-child(2) th input,
@@ -1282,6 +1298,17 @@
             background-color: #ffffff !important;
             -webkit-text-fill-color: #000000 !important;
             opacity: 1 !important;
+            width: 100%;
+            height: 32px;
+            padding: 6px 8px;
+            border: 1px solid #000 !important;
+            display: block;
+            box-sizing: border-box;
+        }
+
+        /* Ensure the second header row itself is visible */
+        .customer-table thead tr:nth-child(2) {
+            background-color: #fafafa !important;
         }
         
         /* Force text color for all input states */
@@ -1573,7 +1600,10 @@
                 <button class="form-button" onclick="fetch163Emails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch 163.com</button>
                 <button class="form-button" onclick="fetchLCFEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch LCF</button>
                 <button class="form-button" onclick="fetchQQEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch QQ Email</button>
-                <button class="form-button" onclick="toggleEmailTableView()" style="margin-bottom: 20px; font-size: 12px;">📋 Table/Card View</button>
+                <button class="form-button" id="email-view-toggle" onclick="toggleEmailTableView()" style="margin-bottom: 20px; font-size: 12px;">📋 Table View (filters visible)</button>
+                <div style="margin: -10px 0 10px; font-size: 12px; color: #333;">
+                    Filters under each header appear only in Table view. Switch views with the button above.
+                </div>
                 <div id="error-message" class="message hidden"></div>
                 <div id="email-list" class="email-list"></div>
             </div>
@@ -3054,6 +3084,12 @@
 
         function toggleEmailTableView() {
             currentEmailViewMode = currentEmailViewMode === 'table' ? 'card' : 'table';
+            const toggleBtn = document.getElementById('email-view-toggle');
+            if (toggleBtn) {
+                toggleBtn.textContent = currentEmailViewMode === 'table'
+                    ? '📋 Table View (filters visible)'
+                    : '📋 Card View';
+            }
             const emailList = document.getElementById('email-list');
             if (emailList) {
                 emailList.dataset.viewMode = currentEmailViewMode;
@@ -6855,7 +6891,13 @@
                 return;
             }
             emailList.dataset.cached = isCached ? 'true' : 'false';
+            // Always default to table view when rendering so filters are visible
+            currentEmailViewMode = 'table';
             emailList.dataset.viewMode = currentEmailViewMode;
+            const toggleBtn = document.getElementById('email-view-toggle');
+            if (toggleBtn) {
+                toggleBtn.textContent = '📋 Table View (filters visible)';
+            }
 
             // Preserve filter input values before regenerating the table
             const savedFilterValues = {
@@ -6906,7 +6948,7 @@
                                     <span class="email-col-resizer" data-column="attachments"></span>
                                 </th>
                             </tr>
-                            <tr>
+                            <tr class="email-filter-row">
                                 <th><input id="email-filter-date" class="customer-filter-input" type="text" placeholder="Filter date" value="${escapeHtml(savedFilterValues.date)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                                 <th><input id="email-filter-name" class="customer-filter-input" type="text" placeholder="Filter name" value="${escapeHtml(savedFilterValues.name)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                                 <th><input id="email-filter-title" class="customer-filter-input" type="text" placeholder="Filter title" value="${escapeHtml(savedFilterValues.title)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>

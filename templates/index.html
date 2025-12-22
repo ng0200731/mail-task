@@ -6828,6 +6828,12 @@
             const emailList = document.getElementById('email-list');
             if (!emailList) return;
             const base = allEmails && allEmails.length ? allEmails : currentEmails;
+            // Remember focus so re-render does not kick user out while typing
+            const activeEl = document.activeElement;
+            const restoreTargetId = activeEl && activeEl.classList && activeEl.classList.contains('customer-filter-input')
+                ? activeEl.id
+                : null;
+            const caretPos = restoreTargetId && typeof activeEl.selectionStart === 'number' ? activeEl.selectionStart : null;
             const dateInput = document.getElementById('email-filter-date');
             const nameInput = document.getElementById('email-filter-name');
             const titleInput = document.getElementById('email-filter-title');
@@ -6845,6 +6851,7 @@
             if (!dateQuery && !nameQuery && !titleQuery && !contentQuery && !attachQuery) {
                 const isCached = emailList.dataset && emailList.dataset.cached === 'true';
                 displayEmails(base, { provider: currentProvider, cached: isCached, filtered: true });
+                restoreFilterFocus(restoreTargetId, caretPos);
                 return;
             }
 
@@ -6873,13 +6880,34 @@
 
             const isCached = emailList.dataset && emailList.dataset.cached === 'true';
             displayEmails(filtered, { provider: currentProvider, cached: isCached, filtered: true });
+            restoreFilterFocus(restoreTargetId, caretPos);
+        }
+
+        // Restore focus/caret to the active filter input after table re-render
+        function restoreFilterFocus(targetId, caretPos) {
+            if (!targetId) return;
+            const input = document.getElementById(targetId);
+            if (!input) return;
+            input.focus({ preventScroll: true });
+            if (typeof caretPos === 'number' && input.setSelectionRange) {
+                input.setSelectionRange(caretPos, caretPos);
+            }
         }
 
         function displayEmails(emails, options = {}) {
             const emailList = document.getElementById('email-list');
-            currentEmails = Array.isArray(emails) ? emails.map(email => ensureEmailSequence({ ...email })) : [];
+            // Normalize and keep an ordered copy
+            const normalizedEmails = Array.isArray(emails) ? emails.map(email => ensureEmailSequence({ ...email })) : [];
+            // Sort by date (newest first)
+            const sortedEmails = normalizedEmails.slice().sort((a, b) => {
+                const ad = a && a.date ? new Date(a.date).getTime() : 0;
+                const bd = b && b.date ? new Date(b.date).getTime() : 0;
+                return bd - ad;
+            });
+            // Only render the latest 50; keep full list in allEmails for filtering
+            currentEmails = sortedEmails.slice(0, 50);
             if (!options.filtered) {
-                allEmails = currentEmails.slice();
+                allEmails = sortedEmails;
             }
             const provider = options.provider || currentProvider;
             const isCached = !!options.cached;

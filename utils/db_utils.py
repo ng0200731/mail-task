@@ -9,12 +9,15 @@ from config import CUSTOMER_DB_PATH
 def get_db_connection():
     """
     Get a database connection with Row factory enabled.
+    Ensures UTF-8 encoding for proper handling of international characters.
     
     Returns:
         sqlite3.Connection: Database connection with row_factory set to sqlite3.Row
     """
-    connection = sqlite3.connect(str(CUSTOMER_DB_PATH))
+    connection = sqlite3.connect(str(CUSTOMER_DB_PATH), detect_types=sqlite3.PARSE_DECLTYPES)
     connection.row_factory = sqlite3.Row
+    # Ensure UTF-8 encoding for text data
+    connection.execute("PRAGMA encoding = 'UTF-8'")
     return connection
 
 

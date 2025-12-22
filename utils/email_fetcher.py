@@ -64,9 +64,12 @@ def fetch_gmail_api(limit=50, days_back=1):
                 headers = payload.get('headers', [])
                 
                 # Extract headers
-                subject = next((h['value'] for h in headers if h['name'] == 'Subject'), 'No Subject')
-                from_addr = next((h['value'] for h in headers if h['name'] == 'From'), '')
-                to_addr = next((h['value'] for h in headers if h['name'] == 'To'), '')
+                subject_raw = next((h['value'] for h in headers if h['name'] == 'Subject'), 'No Subject')
+                subject = decode_mime_words(subject_raw) if subject_raw else 'No Subject'
+                from_addr_raw = next((h['value'] for h in headers if h['name'] == 'From'), '')
+                from_addr = decode_mime_words(from_addr_raw) if from_addr_raw else ''
+                to_addr_raw = next((h['value'] for h in headers if h['name'] == 'To'), '')
+                to_addr = decode_mime_words(to_addr_raw) if to_addr_raw else ''
                 date_str = next((h['value'] for h in headers if h['name'] == 'Date'), '')
                 
                 # Parse date
@@ -98,6 +101,17 @@ def fetch_gmail_api(limit=50, days_back=1):
                         body_data = part.get('body', {})
                         attachment_id = body_data.get('attachmentId')
                         
+                        # Extract headers for Content-ID and Content-Disposition
+                        headers = part.get('headers', [])
+                        content_id = ''
+                        content_disposition = ''
+                        for header in headers:
+                            header_name = header.get('name', '').lower()
+                            if header_name == 'content-id':
+                                content_id = header.get('value', '').strip()
+                            elif header_name == 'content-disposition':
+                                content_disposition = header.get('value', '').lower()
+                        
                         # Check if it's an attachment
                         if attachment_id:
                             try:
@@ -114,7 +128,9 @@ def fetch_gmail_api(limit=50, days_back=1):
                                     'filename': filename or f'attachment_{len(attachments) + 1}',
                                     'content_type': mime_type or 'application/octet-stream',
                                     'size': len(file_data),
-                                    'data': base64.b64encode(file_data).decode('ascii')
+                                    'data': base64.b64encode(file_data).decode('ascii'),
+                                    'content_id': content_id,
+                                    'content_disposition': content_disposition
                                 })
                             except Exception as att_exc:
                                 print(f"Error fetching attachment: {att_exc}")
@@ -129,7 +145,9 @@ def fetch_gmail_api(limit=50, days_back=1):
                                         'filename': filename,
                                         'content_type': mime_type or 'application/octet-stream',
                                         'size': len(file_data),
-                                        'data': base64.b64encode(file_data).decode('ascii')
+                                        'data': base64.b64encode(file_data).decode('ascii'),
+                                        'content_id': content_id,
+                                        'content_disposition': content_disposition
                                     })
                                 except Exception:
                                     pass

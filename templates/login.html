@@ -187,17 +187,36 @@
             border: 2px solid #000000;
         }
 
-        .code-input {
-            font-size: 24px;
-            text-align: center;
-            letter-spacing: 8px;
-            font-weight: bold;
+        .code-inputs {
+            display: grid;
+            grid-template-columns: repeat(6, 52px);
+            justify-content: center;
+            gap: 12px;
+            margin-top: 8px;
         }
 
-        .code-input::placeholder {
-            letter-spacing: 0;
+        .code-box {
+            width: 52px;
+            height: 58px;
+            padding: 0;
+            border: 2px solid #000000;
+            background-color: #ffffff;
+            color: #000000;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+        }
+
+        .code-box:focus {
+            outline: none;
+            background-color: #f0f0f0;
+        }
+
+        .code-box::placeholder {
+            color: #a0a0a0;
             font-weight: normal;
-            font-size: 16px;
         }
 
         .resend-info {
@@ -248,17 +267,75 @@
             </div>
 
             <div class="form-group" id="codeGroup" style="display: none;">
-                <label for="code">Verification Code</label>
-                <input 
-                    type="text" 
-                    id="code" 
-                    name="code" 
-                    placeholder="Enter 6-digit code" 
-                    maxlength="6"
-                    pattern="[0-9]{6}"
-                    class="code-input"
-                    autocomplete="off"
-                >
+                <label for="codeInputs">Verification Code</label>
+                <div class="code-inputs" id="codeInputs">
+                    <input 
+                        type="text" 
+                        id="code-digit-1" 
+                        inputmode="numeric" 
+                        pattern="[0-9]*" 
+                        maxlength="1"
+                        class="code-box" 
+                        autocomplete="one-time-code"
+                        aria-label="Verification code digit 1"
+                        data-index="0"
+                    >
+                    <input 
+                        type="text" 
+                        id="code-digit-2" 
+                        inputmode="numeric" 
+                        pattern="[0-9]*" 
+                        maxlength="1"
+                        class="code-box" 
+                        autocomplete="one-time-code"
+                        aria-label="Verification code digit 2"
+                        data-index="1"
+                    >
+                    <input 
+                        type="text" 
+                        id="code-digit-3" 
+                        inputmode="numeric" 
+                        pattern="[0-9]*" 
+                        maxlength="1"
+                        class="code-box" 
+                        autocomplete="one-time-code"
+                        aria-label="Verification code digit 3"
+                        data-index="2"
+                    >
+                    <input 
+                        type="text" 
+                        id="code-digit-4" 
+                        inputmode="numeric" 
+                        pattern="[0-9]*" 
+                        maxlength="1"
+                        class="code-box" 
+                        autocomplete="one-time-code"
+                        aria-label="Verification code digit 4"
+                        data-index="3"
+                    >
+                    <input 
+                        type="text" 
+                        id="code-digit-5" 
+                        inputmode="numeric" 
+                        pattern="[0-9]*" 
+                        maxlength="1"
+                        class="code-box" 
+                        autocomplete="one-time-code"
+                        aria-label="Verification code digit 5"
+                        data-index="4"
+                    >
+                    <input 
+                        type="text" 
+                        id="code-digit-6" 
+                        inputmode="numeric" 
+                        pattern="[0-9]*" 
+                        maxlength="1"
+                        class="code-box" 
+                        autocomplete="one-time-code"
+                        aria-label="Verification code digit 6"
+                        data-index="5"
+                    >
+                </div>
                 <div class="resend-info">
                     Didn't receive the code? 
                     <span class="resend-link" id="resendLink">Resend</span>
@@ -271,12 +348,12 @@
 
     <script>
         // Initialize elements after DOM is ready
-        let emailInput, codeInput, sendBtn, submitBtn, codeGroup, messageDiv, resendLink, loginForm;
+        let emailInput, codeInputs, sendBtn, submitBtn, codeGroup, messageDiv, resendLink, loginForm;
         let currentEmail = '';
         
         document.addEventListener('DOMContentLoaded', function() {
             emailInput = document.getElementById('email');
-            codeInput = document.getElementById('code');
+            codeInputs = Array.from(document.querySelectorAll('.code-box'));
             sendBtn = document.getElementById('sendBtn');
             submitBtn = document.getElementById('submitBtn');
             codeGroup = document.getElementById('codeGroup');
@@ -312,6 +389,24 @@
             }
         }
 
+        function getCodeValue() {
+            if (!codeInputs || !codeInputs.length) return '';
+            return codeInputs.map(input => input.value.trim()).join('');
+        }
+
+        function clearCodeInputs() {
+            if (!codeInputs) return;
+            codeInputs.forEach(input => {
+                input.value = '';
+            });
+        }
+
+        function focusFirstCodeBox() {
+            if (codeInputs && codeInputs.length) {
+                codeInputs[0].focus();
+            }
+        }
+
         function sendCode() {
             if (!emailInput) return;
             
@@ -344,7 +439,8 @@
                     showMessage('Verification code sent to your email!', 'success');
                     if (codeGroup) codeGroup.style.display = 'block';
                     if (submitBtn) submitBtn.style.display = 'block';
-                    if (codeInput) codeInput.focus();
+                    clearCodeInputs();
+                    focusFirstCodeBox();
                     if (emailInput) emailInput.disabled = true;
                 } else {
                     showMessage(data.error || 'Failed to send verification code', 'error');
@@ -386,29 +482,18 @@
                 });
             }
 
-            // Only allow numbers in code input
-            if (codeInput) {
-                codeInput.addEventListener('input', (e) => {
-                    e.target.value = e.target.value.replace(/[^0-9]/g, '');
-                });
-
-                // Auto-submit when 6 digits are entered
-                codeInput.addEventListener('input', (e) => {
-                    if (e.target.value.length === 6 && loginForm) {
-                        loginForm.dispatchEvent(new Event('submit'));
-                    }
-                });
-            }
+            setupCodeInputs();
 
             if (loginForm) {
                 loginForm.addEventListener('submit', (e) => {
                     e.preventDefault();
                     
                     const email = emailInput ? emailInput.value.trim() : '';
-                    const code = codeInput ? codeInput.value.trim() : '';
+                    const code = getCodeValue();
 
                     if (!code || code.length !== 6) {
                         showMessage('Please enter the 6-digit verification code', 'error');
+                        focusFirstCodeBox();
                         return;
                     }
 
@@ -437,10 +522,8 @@
                                 submitBtn.disabled = false;
                                 submitBtn.textContent = 'Verify & Login';
                             }
-                            if (codeInput) {
-                                codeInput.value = '';
-                                codeInput.focus();
-                            }
+                            clearCodeInputs();
+                            focusFirstCodeBox();
                         }
                     })
                     .catch(error => {
@@ -453,7 +536,62 @@
                 });
             }
         }
+
+        function setupCodeInputs() {
+            if (!codeInputs || !codeInputs.length) return;
+
+            codeInputs.forEach((input, index) => {
+                input.addEventListener('input', (e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 1);
+                    e.target.value = value;
+
+                    if (value && index < codeInputs.length - 1) {
+                        codeInputs[index + 1].focus();
+                    }
+
+                    const code = getCodeValue();
+                    if (code.length === codeInputs.length && loginForm) {
+                        loginForm.dispatchEvent(new Event('submit'));
+                    }
+                });
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && !input.value && index > 0) {
+                        codeInputs[index - 1].focus();
+                    }
+
+                    if (e.key === 'ArrowLeft' && index > 0) {
+                        e.preventDefault();
+                        codeInputs[index - 1].focus();
+                    }
+
+                    if (e.key === 'ArrowRight' && index < codeInputs.length - 1) {
+                        e.preventDefault();
+                        codeInputs[index + 1].focus();
+                    }
+                });
+
+                input.addEventListener('paste', (e) => {
+                    const pasted = (e.clipboardData || window.clipboardData).getData('text');
+                    const digits = pasted.replace(/[^0-9]/g, '').slice(0, codeInputs.length);
+
+                    if (digits) {
+                        e.preventDefault();
+                        codeInputs.forEach((box, i) => {
+                            box.value = digits[i] || '';
+                        });
+
+                        const code = getCodeValue();
+                        if (code.length === codeInputs.length && loginForm) {
+                            loginForm.dispatchEvent(new Event('submit'));
+                        } else {
+                            const nextIndex = Math.min(digits.length, codeInputs.length - 1);
+                            codeInputs[nextIndex].focus();
+                        }
+                    }
+                });
+            });
+        }
     </script>
 </body>
 </html>
-

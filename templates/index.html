@@ -1353,7 +1353,25 @@
 
         .task-table thead tr:nth-child(2) th {
             top: 40px; /* height of first header row */
-            background-color: #ffffff;
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            padding: 6px 8px;
+            min-height: 38px;
+        }
+
+        .task-table thead tr:nth-child(2) th input,
+        .task-table thead tr:nth-child(2) th input[type="text"],
+        .task-table thead tr:nth-child(2) th .customer-filter-input {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            -webkit-text-fill-color: #000000 !important;
+            opacity: 1 !important;
+            width: 100%;
+            height: 32px;
+            padding: 6px 8px;
+            border: 1px solid #000 !important;
+            display: block;
+            box-sizing: border-box;
         }
 
         /* Hide sequence column in task table */
@@ -2979,32 +2997,25 @@
                     const storageKey = `emails:${provider}:${dateKey}`;
                     try {
                         // Limit the number of emails cached to prevent QuotaExceededError
-                        // Only cache last 50 emails per day to avoid exceeding localStorage quota
-                        const limitedList = list.slice(-50);
+                        // Only cache last 40 emails per day to avoid exceeding localStorage quota
+                        const limitedList = list.slice(-40);
                         const dataToStore = JSON.stringify({ date: dateKey, emails: limitedList });
-                        // Check if data is too large (localStorage limit is usually 5-10MB)
-                        if (dataToStore.length > 4 * 1024 * 1024) {
-                            console.warn(`Email cache for ${dateKey} is too large, skipping cache`);
-                            return;
-                        }
                         localStorage.setItem(storageKey, dataToStore);
                     } catch (storageError) {
-                        // If storage fails, try to clear old data and retry
+                        // If storage fails, try to clear old data; skip retry to avoid ReferenceError / extra quota pressure
                         if (storageError.name === 'QuotaExceededError') {
                             console.warn(`localStorage quota exceeded for ${storageKey}, clearing old cache`);
-                            // Clear old email cache entries
                             try {
+                                const keysToRemove = [];
                                 for (let i = 0; i < localStorage.length; i++) {
                                     const key = localStorage.key(i);
                                     if (key && key.startsWith('emails:')) {
-                                        localStorage.removeItem(key);
+                                        keysToRemove.push(key);
                                     }
                                 }
-                                // Retry with limited data
-                                const limitedList = list.slice(-20);
-                                localStorage.setItem(storageKey, JSON.stringify({ date: dateKey, emails: limitedList }));
+                                keysToRemove.forEach(k => localStorage.removeItem(k));
                             } catch (clearError) {
-                                console.error('Failed to clear and retry cache:', clearError);
+                                console.error('Failed to clear old email cache keys:', clearError);
                             }
                         } else {
                             console.error(`Failed to cache emails for ${dateKey}:`, storageError);
@@ -3033,7 +3044,14 @@
                         });
                     }
                 });
-                return collected.length > 0 ? collected : null;
+                if (collected.length === 0) return null;
+                // Sort by date descending and only keep latest 40 emails overall
+                const sorted = collected.slice().sort((a, b) => {
+                    const ad = a && a.date ? new Date(a.date).getTime() : 0;
+                    const bd = b && b.date ? new Date(b.date).getTime() : 0;
+                    return bd - ad;
+                });
+                return sorted.slice(0, 40);
             } catch (error) {
                 console.error('Failed to load cached emails', error);
             }
@@ -8934,21 +8952,21 @@
                                             <th>Attachments</th>
                                             <th>Action</th>
                                         </tr>
-                                        <tr>
-                                            <th><input type="text" class="task-filter-input" data-field="sequence" placeholder="Filter sequence"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="business_type" placeholder="Filter business type"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="company_name" placeholder="Filter company name"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="customer" placeholder="Filter customer"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="email" placeholder="Filter email"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="catalogue" placeholder="Filter type"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="template" placeholder="Filter context"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="status" placeholder="Filter status"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="deadline" placeholder="Filter deadline"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="created_at" placeholder="Filter date"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="created_by" placeholder="Filter created by"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="source" placeholder="Filter source"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="updated_at" placeholder="Filter last updated"></th>
-                                            <th><input type="text" class="task-filter-input" data-field="attachments" placeholder="Filter attachments"></th>
+                                        <tr class="task-filter-row">
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="sequence" placeholder="Filter sequence"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="business_type" placeholder="Filter business type"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="company_name" placeholder="Filter company name"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="customer" placeholder="Filter customer"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="email" placeholder="Filter email"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="catalogue" placeholder="Filter type"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="template" placeholder="Filter context"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="status" placeholder="Filter status"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="deadline" placeholder="Filter deadline"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="created_at" placeholder="Filter date"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="created_by" placeholder="Filter created by"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="source" placeholder="Filter source"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="updated_at" placeholder="Filter last updated"></th>
+                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="attachments" placeholder="Filter attachments"></th>
                                             <th></th>
                                         </tr>
                                     </thead>

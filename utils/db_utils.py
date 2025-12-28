@@ -500,12 +500,13 @@ def initialize_database():
             ('Tuvalu', 194),
             ('Holy See', 195)
         ]
-        # Replace all countries with the new list
-        cursor.execute("DELETE FROM countries")
-        cursor.executemany("""
-            INSERT INTO countries (name, display_order) VALUES (?, ?)
-        """, default_countries)
-        connection.commit()
+        # Initialize default countries only if table is empty (don't overwrite existing data)
+        cursor.execute("SELECT COUNT(*) as count FROM countries")
+        if cursor.fetchone()['count'] == 0:
+            cursor.executemany("""
+                INSERT INTO countries (name, display_order) VALUES (?, ?)
+            """, default_countries)
+            connection.commit()
     finally:
         if cursor:
             cursor.close()

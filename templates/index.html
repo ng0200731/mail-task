@@ -3171,11 +3171,13 @@
                                 layout[col] = pct;
                             }
                         });
-                        if (layout.date && layout.name && layout.content && layout.attachments) {
+                        if (layout.date && layout.name && layout.title && layout.content && layout.company && layout.attachments) {
                             saveEmailLayoutToProfile({
                                 date: layout.date,
                                 name: layout.name,
+                                title: layout.title,
                                 content: layout.content,
+                                company: layout.company,
                                 attachments: layout.attachments
                             });
                         }
@@ -4042,9 +4044,8 @@
                 event.currentTarget.classList.add('active');
             }
             // Ensure countries and customer sources are loaded for dropdowns
-            if (COUNTRIES.length === 0) {
-                loadCountries();
-            }
+            // Always reload countries to ensure we have the latest data from database
+            loadCountries();
             if (CUSTOMER_SOURCES.length === 0) {
                 loadCustomerSources();
             }
@@ -6808,14 +6809,16 @@
             const name = Number(layout.name);
             const title = Number(layout.title);
             const content = Number(layout.content);
+            const company = Number(layout.company);
             const attachments = Number(layout.attachments);
             // Fallback defaults; values do not need to sum to 100 exactly.
             return {
                 date: !Number.isNaN(date) && date > 0 ? date : 12,
-                name: !Number.isNaN(name) && name > 0 ? name : 20,
-                title: !Number.isNaN(title) && title > 0 ? title : 25,
+                name: !Number.isNaN(name) && name > 0 ? name : 18,
+                title: !Number.isNaN(title) && title > 0 ? title : 20,
                 content: !Number.isNaN(content) && content > 0 ? content : 15,
-                attachments: !Number.isNaN(attachments) && attachments > 0 ? attachments : 28
+                company: !Number.isNaN(company) && company > 0 ? company : 15,
+                attachments: !Number.isNaN(attachments) && attachments > 0 ? attachments : 20
             };
         }
 
@@ -6828,6 +6831,7 @@
                 name: layout.name,
                 title: layout.title,
                 content: layout.content,
+                company: layout.company,
                 attachments: layout.attachments
             };
             localStorage.setItem('emailProfiles', JSON.stringify(profiles));
@@ -6847,18 +6851,24 @@
             
             const dateInput = document.getElementById('email-filter-date');
             const nameInput = document.getElementById('email-filter-name');
+            const titleInput = document.getElementById('email-filter-title');
             const contentInput = document.getElementById('email-filter-content');
+            const companyInput = document.getElementById('email-filter-company');
             const attachmentsInput = document.getElementById('email-filter-attachments');
             
             const dateVal = (dateInput && dateInput.value || '').trim();
             const nameVal = (nameInput && nameInput.value || '').trim();
+            const titleVal = (titleInput && titleInput.value || '').trim();
             const contentVal = (contentInput && contentInput.value || '').trim();
+            const companyVal = (companyInput && companyInput.value || '').trim();
             const attachVal = (attachmentsInput && attachmentsInput.value || '').trim();
             
             const filters = [];
             if (dateVal) filters.push(`Date: "${escapeHtml(dateVal)}"`);
             if (nameVal) filters.push(`Name: "${escapeHtml(nameVal)}"`);
+            if (titleVal) filters.push(`Title: "${escapeHtml(titleVal)}"`);
             if (contentVal) filters.push(`Content: "${escapeHtml(contentVal)}"`);
+            if (companyVal) filters.push(`Company: "${escapeHtml(companyVal)}"`);
             if (attachVal) filters.push(`Attachments: "${escapeHtml(attachVal)}"`);
             
             if (filters.length > 0) {
@@ -6882,17 +6892,19 @@
             const nameInput = document.getElementById('email-filter-name');
             const titleInput = document.getElementById('email-filter-title');
             const contentInput = document.getElementById('email-filter-content');
+            const companyInput = document.getElementById('email-filter-company');
             const attachmentsInput = document.getElementById('email-filter-attachments');
             const dateQuery = (dateInput && dateInput.value || '').trim().toLowerCase();
             const nameQuery = (nameInput && nameInput.value || '').trim().toLowerCase();
             const titleQuery = (titleInput && titleInput.value || '').trim().toLowerCase();
             const contentQuery = (contentInput && contentInput.value || '').trim().toLowerCase();
+            const companyQuery = (companyInput && companyInput.value || '').trim().toLowerCase();
             const attachQuery = (attachmentsInput && attachmentsInput.value || '').trim().toLowerCase();
             
             // Update filter status display
             updateFilterStatus();
 
-            if (!dateQuery && !nameQuery && !titleQuery && !contentQuery && !attachQuery) {
+            if (!dateQuery && !nameQuery && !titleQuery && !contentQuery && !companyQuery && !attachQuery) {
                 const isCached = emailList.dataset && emailList.dataset.cached === 'true';
                 displayEmails(base, { provider: currentProvider, cached: isCached, filtered: true });
                 restoreFilterFocus(restoreTargetId, caretPos);
@@ -6907,11 +6919,16 @@
                 const subjectVal = (email.subject || '').toString().toLowerCase();
                 const bodyText = extractEmailBodyText(email).toLowerCase();
                 const attachments = Array.isArray(email.attachments) ? email.attachments : [];
+                
+                // Find customer by email to get company name
+                const customer = findCustomerByEmail(email.from || '');
+                const companyName = (customer && customer.company_name ? customer.company_name : 'new customer').toLowerCase();
 
                 if (dateQuery && !dateVal.includes(dateQuery)) return false;
                 if (nameQuery && !(fromVal.includes(nameQuery) || displayName.includes(nameQuery))) return false;
                 if (titleQuery && !subjectVal.includes(titleQuery)) return false;
                 if (contentQuery && !bodyText.includes(contentQuery)) return false;
+                if (companyQuery && !companyName.includes(companyQuery)) return false;
                 if (attachQuery) {
                     const match = attachments.some(att => {
                         const fname = (att && att.filename || '').toString().toLowerCase();
@@ -6984,11 +7001,13 @@
                 const nameInput = document.getElementById('email-filter-name');
                 const titleInput = document.getElementById('email-filter-title');
                 const contentInput = document.getElementById('email-filter-content');
+                const companyInput = document.getElementById('email-filter-company');
                 const attachmentsInput = document.getElementById('email-filter-attachments');
                 if (dateInput) savedFilterValues.date = dateInput.value || '';
                 if (nameInput) savedFilterValues.name = nameInput.value || '';
                 if (titleInput) savedFilterValues.title = titleInput.value || '';
                 if (contentInput) savedFilterValues.content = contentInput.value || '';
+                if (companyInput) savedFilterValues.company = companyInput.value || '';
                 if (attachmentsInput) savedFilterValues.attachments = attachmentsInput.value || '';
             }
 
@@ -7015,6 +7034,10 @@
                                     Content
                                     <span class="email-col-resizer" data-column="content"></span>
                                 </th>
+                                <th style="width: ${layout.company}%; min-width: 120px;" data-column="company">
+                                    Company name
+                                    <span class="email-col-resizer" data-column="company"></span>
+                                </th>
                                 <th style="width: ${layout.attachments}%; min-width: 120px;" data-column="attachments">
                                     Attachments
                                     <span class="email-col-resizer" data-column="attachments"></span>
@@ -7025,18 +7048,19 @@
                                 <th><input id="email-filter-name" class="customer-filter-input" type="text" placeholder="Filter name" value="${escapeHtml(savedFilterValues.name)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                                 <th><input id="email-filter-title" class="customer-filter-input" type="text" placeholder="Filter title" value="${escapeHtml(savedFilterValues.title)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                                 <th><input id="email-filter-content" class="customer-filter-input" type="text" placeholder="Filter content" value="${escapeHtml(savedFilterValues.content)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
+                                <th><input id="email-filter-company" class="customer-filter-input" type="text" placeholder="Filter company" value="${escapeHtml(savedFilterValues.company)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                                 <th><input id="email-filter-attachments" class="customer-filter-input" type="text" placeholder="Filter attachments" value="${escapeHtml(savedFilterValues.attachments)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                             </tr>
                             <tr class="filter-status-row" style="background-color: #f5f5f5; font-size: 12px; color: #666;">
-                                <th colspan="5" style="text-align: left; padding: 8px 12px; font-weight: normal;">
-                                    <span id="email-filter-status">${(savedFilterValues.date || savedFilterValues.name || savedFilterValues.title || savedFilterValues.content || savedFilterValues.attachments) ? `Active filters: ${savedFilterValues.date ? `Date: "${escapeHtml(savedFilterValues.date)}"` : ''} ${savedFilterValues.name ? `Name: "${escapeHtml(savedFilterValues.name)}"` : ''} ${savedFilterValues.title ? `Title: "${escapeHtml(savedFilterValues.title)}"` : ''} ${savedFilterValues.content ? `Content: "${escapeHtml(savedFilterValues.content)}"` : ''} ${savedFilterValues.attachments ? `Attachments: "${escapeHtml(savedFilterValues.attachments)}"` : ''}` : 'No active filters'}</span>
+                                <th colspan="6" style="text-align: left; padding: 8px 12px; font-weight: normal;">
+                                    <span id="email-filter-status">${(savedFilterValues.date || savedFilterValues.name || savedFilterValues.title || savedFilterValues.content || savedFilterValues.company || savedFilterValues.attachments) ? `Active filters: ${savedFilterValues.date ? `Date: "${escapeHtml(savedFilterValues.date)}"` : ''} ${savedFilterValues.name ? `Name: "${escapeHtml(savedFilterValues.name)}"` : ''} ${savedFilterValues.title ? `Title: "${escapeHtml(savedFilterValues.title)}"` : ''} ${savedFilterValues.content ? `Content: "${escapeHtml(savedFilterValues.content)}"` : ''} ${savedFilterValues.company ? `Company: "${escapeHtml(savedFilterValues.company)}"` : ''} ${savedFilterValues.attachments ? `Attachments: "${escapeHtml(savedFilterValues.attachments)}"` : ''}` : 'No active filters'}</span>
                                 </th>
                             </tr>
                         </thead>
                         <tbody>
                             ${currentEmails.length === 0 ? `
                                 <tr>
-                                    <td colspan="5" style="text-align: center; padding: 20px; color: #666; font-style: italic;">
+                                    <td colspan="6" style="text-align: center; padding: 20px; color: #666; font-style: italic;">
                                         No emails found for this provider.
                                     </td>
                                 </tr>
@@ -7057,6 +7081,12 @@
                                     : '<span style="color: #666; font-style: italic;">No attachments</span>';
                                 const safePreview = escapeHtml(preview || '');
                                 const safeSubject = escapeHtml(subject || '');
+                                
+                                // Find customer by email to get company name
+                                const customer = findCustomerByEmail(email.from || '');
+                                const companyName = customer && customer.company_name ? customer.company_name : 'new customer';
+                                const safeCompanyName = escapeHtml(companyName);
+                                
                                 return `
                                     <tr class="email-row" data-index="${index}">
                                         <td>${escapeHtml(formatEmailDate(email.date || ''))}</td>
@@ -7068,6 +7098,7 @@
                                                 ${truncated ? `<a href="#" class="email-read-more" data-index="${index}">Read more</a>` : ''}
                                             </div>
                                         </td>
+                                        <td>${safeCompanyName}</td>
                                         <td>
                                             <div class="email-attachments">
                                                 ${attachmentHtml}
@@ -7147,7 +7178,7 @@
                 
                 // Force set input styles to ensure text is visible
                 setTimeout(() => {
-                    const filterInputs = document.querySelectorAll('#email-filter-date, #email-filter-name, #email-filter-title, #email-filter-content, #email-filter-attachments');
+                    const filterInputs = document.querySelectorAll('#email-filter-date, #email-filter-name, #email-filter-title, #email-filter-content, #email-filter-company, #email-filter-attachments');
                     filterInputs.forEach(input => {
                         if (input) {
                             // DO NOT remove style attribute - keep the inline styles we set in HTML
@@ -9835,37 +9866,56 @@
             const dropdown = document.getElementById('country-dropdown');
             if (!input || !dropdown) return;
             
-            // Ensure countries are loaded
-            if (COUNTRIES.length === 0) {
-                fetch('/api/countries')
-                    .then(response => response.json())
-                    .then(countries => {
-                        // Alphabetical list for Create Customer dropdown
-                        COUNTRIES = countries
-                            .map(c => c.name)
-                            .sort((a, b) => (a || '').localeCompare(b || ''));
-                        filterCountries(); // Retry after loading
-                    })
-                    .catch(error => {
-                        console.error('Error loading countries:', error);
-                    });
-                return;
-            }
-            
-            const searchTerm = input.value.toLowerCase().trim();
-            const filtered = COUNTRIES.filter(country => 
-                country.toLowerCase().includes(searchTerm)
-            ).slice(0, 10); // Show max 10 results
-            
-            if (filtered.length === 0 || searchTerm === '') {
-                dropdown.classList.add('hidden');
-                return;
-            }
-            
-            dropdown.innerHTML = filtered.map(country => 
-                `<div class="country-dropdown-item" onclick="selectCountry('${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
-            ).join('');
-            dropdown.classList.remove('hidden');
+            // Always reload countries to ensure we have the latest data from database
+            // This ensures Hong Kong or any newly added countries are available
+            fetch('/api/countries')
+                .then(response => response.json())
+                .then(countries => {
+                    // Alphabetical list for Create Customer dropdown
+                    COUNTRIES = countries
+                        .map(c => c.name)
+                        .sort((a, b) => (a || '').localeCompare(b || ''));
+                    
+                    const searchTerm = input.value.toLowerCase().trim();
+                    const filtered = COUNTRIES.filter(country => 
+                        country.toLowerCase().includes(searchTerm)
+                    ).slice(0, 10); // Show max 10 results
+                    
+                    if (filtered.length === 0 && searchTerm === '') {
+                        // Show all countries if no search term
+                        const allCountries = COUNTRIES.slice(0, 10);
+                        dropdown.innerHTML = allCountries.map(country => 
+                            `<div class="country-dropdown-item" onclick="selectCountry('${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                        ).join('');
+                        dropdown.classList.remove('hidden');
+                    } else if (filtered.length > 0) {
+                        dropdown.innerHTML = filtered.map(country => 
+                            `<div class="country-dropdown-item" onclick="selectCountry('${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                        ).join('');
+                        dropdown.classList.remove('hidden');
+                    } else {
+                        dropdown.classList.add('hidden');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading countries:', error);
+                    // Fallback to existing COUNTRIES if fetch fails
+                    if (COUNTRIES.length > 0) {
+                        const searchTerm = input.value.toLowerCase().trim();
+                        const filtered = COUNTRIES.filter(country => 
+                            country.toLowerCase().includes(searchTerm)
+                        ).slice(0, 10);
+                        
+                        if (filtered.length > 0) {
+                            dropdown.innerHTML = filtered.map(country => 
+                                `<div class="country-dropdown-item" onclick="selectCountry('${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                            ).join('');
+                            dropdown.classList.remove('hidden');
+                        } else {
+                            dropdown.classList.add('hidden');
+                        }
+                    }
+                });
         }
 
         function showCountryDropdown() {
@@ -9873,22 +9923,54 @@
             const dropdown = document.getElementById('country-dropdown');
             if (!input || !dropdown) return;
             
-            // Ensure countries are loaded
-            if (COUNTRIES.length === 0) {
-                fetch('/api/countries')
-                    .then(response => response.json())
-                    .then(countries => {
-                        // Alphabetical list for Create Customer dropdown
-                        COUNTRIES = countries
-                            .map(c => c.name)
-                            .sort((a, b) => (a || '').localeCompare(b || ''));
-                        showCountryDropdown(); // Retry after loading
-                    })
-                    .catch(error => {
-                        console.error('Error loading countries:', error);
-                    });
-                return;
-            }
+            // Always reload countries to ensure we have the latest data from database
+            // This ensures Hong Kong or any newly added countries are available
+            fetch('/api/countries')
+                .then(response => response.json())
+                .then(countries => {
+                    // Alphabetical list for Create Customer dropdown
+                    COUNTRIES = countries
+                        .map(c => c.name)
+                        .sort((a, b) => (a || '').localeCompare(b || ''));
+                    // Now show the dropdown with updated countries
+                    const searchTerm = input.value.toLowerCase().trim();
+                    const filtered = COUNTRIES.filter(country => 
+                        country.toLowerCase().includes(searchTerm)
+                    ).slice(0, 10);
+                    
+                    if (filtered.length === 0 && searchTerm === '') {
+                        // Show all countries if no search term
+                        const allCountries = COUNTRIES.slice(0, 10);
+                        dropdown.innerHTML = allCountries.map(country => 
+                            `<div class="country-dropdown-item" onclick="selectCountry('${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                        ).join('');
+                    } else if (filtered.length > 0) {
+                        dropdown.innerHTML = filtered.map(country => 
+                            `<div class="country-dropdown-item" onclick="selectCountry('${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                        ).join('');
+                    } else {
+                        dropdown.classList.add('hidden');
+                        return;
+                    }
+                    dropdown.classList.remove('hidden');
+                })
+                .catch(error => {
+                    console.error('Error loading countries:', error);
+                    // Fallback to existing COUNTRIES if fetch fails
+                    if (COUNTRIES.length > 0) {
+                        const searchTerm = input.value.toLowerCase().trim();
+                        const filtered = COUNTRIES.filter(country => 
+                            country.toLowerCase().includes(searchTerm)
+                        ).slice(0, 10);
+                        
+                        if (filtered.length > 0) {
+                            dropdown.innerHTML = filtered.map(country => 
+                                `<div class="country-dropdown-item" onclick="selectCountry('${country.replace(/'/g, "\\'")}')">${escapeHtml(country)}</div>`
+                            ).join('');
+                            dropdown.classList.remove('hidden');
+                        }
+                    }
+                });
             
             if (input.value.trim() === '') {
                 // Show full alphabetically sorted list when field is empty and clicked

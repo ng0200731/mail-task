@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Receiver - v{{ version }}</title>
     <!-- Quill.js Rich Text Editor -->
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.js"></script>
     <style>
         * {
             margin: 0;
@@ -1551,39 +1551,39 @@
     <div class="container">
         <div class="left-menu">
             {% if user_level == '2' or user_level == '3' %}
-            <button class="menu-button active" onclick="showReceiveMail()">
+            <button class="menu-button active" onclick="showReceiveMail(event)">
                 <span class="label-short">R</span>
                 <span class="label-full">Receive Mail</span>
             </button>
-            <button class="menu-button" onclick="showSend()">
+            <button class="menu-button" onclick="showSend(event)">
                 <span class="label-short">S</span>
                 <span class="label-full">Send</span>
             </button>
             {% endif %}
-            <button class="menu-button {% if user_level == '1' %}active{% endif %}" onclick="showCreateCustomer()">
+            <button class="menu-button {% if user_level == '1' %}active{% endif %}" onclick="showCreateCustomer(event)">
                 <span class="label-short">C</span>
                 <span class="label-full">Create Customer</span>
             </button>
             {% if user_level == '2' or user_level == '3' %}
-            <button class="menu-button" onclick="showTask()">
+            <button class="menu-button" onclick="showTask(event)">
                 <span class="label-short">T</span>
                 <span class="label-full">Task</span>
             </button>
             {% endif %}
-            <button class="menu-button" onclick="showTaskList()">
+            <button class="menu-button" onclick="showTaskList(event)">
                 <span class="label-short">TL</span>
                 <span class="label-full">Task List</span>
             </button>
             {% if user_level == '2' or user_level == '3' %}
-            <button class="menu-button" onclick="showDropdownList()">
+            <button class="menu-button" onclick="showDropdownList(event)">
                 <span class="label-short">D</span>
                 <span class="label-full">Dropdown List</span>
             </button>
-            <button class="menu-button" onclick="showSettings()">
+            <button class="menu-button" onclick="showSettings(event)">
                 <span class="label-short">S</span>
                 <span class="label-full">Settings</span>
             </button>
-            <button class="menu-button" onclick="showSecurity()">
+            <button class="menu-button" onclick="showSecurity(event)">
                 <span class="label-short">SC</span>
                 <span class="label-full">Security</span>
             </button>
@@ -2632,11 +2632,12 @@
         const editTaskDeadlineInput = document.getElementById('edit-task-deadline');
         const editTaskAttachmentsDiv = document.getElementById('edit-task-attachments');
         const editTaskTemplateEditorDiv = document.getElementById('edit-task-template-editor');
+        let inlineTaskEditId = null;
         const viewTaskModal = document.getElementById('view-task-modal');
         
         // Initialize Quill editor for task modal
         let taskNotesEditor = null;
-        if (taskNotesEditorDiv) {
+        if (taskNotesEditorDiv && typeof Quill !== 'undefined') {
             taskNotesEditor = new Quill('#task-notes-editor', {
                 theme: 'snow',
                 modules: {
@@ -2652,10 +2653,12 @@
                     ]
                 }
             });
+        } else if (taskNotesEditorDiv && typeof Quill === 'undefined') {
+            console.warn('Quill.js is not loaded. Rich text editor for task notes will not be available.');
         }
 
         let editTaskEditor = null;
-        if (editTaskTemplateEditorDiv) {
+        if (editTaskTemplateEditorDiv && typeof Quill !== 'undefined') {
             editTaskEditor = new Quill('#edit-task-template-editor', {
                 theme: 'snow',
                 modules: {
@@ -2671,6 +2674,8 @@
                     ]
                 }
             });
+        } else if (editTaskTemplateEditorDiv && typeof Quill === 'undefined') {
+            console.warn('Quill.js is not loaded. Rich text editor for edit task will not be available.');
         }
         const customerStatusDiv = document.getElementById('customer-status');
         const customerEmailAddressInput = document.getElementById('customer-email-address');
@@ -3961,7 +3966,7 @@
             }
         };
 
-        function showReceiveMail() {
+        function showReceiveMail(event) {
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -3977,7 +3982,7 @@
             document.getElementById('content-title').textContent = 'Receive Mail';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
             if (event && event.target) {
-            event.target.classList.add('active');
+                event.target.classList.add('active');
             }
             const emailList = document.getElementById('email-list');
             if (currentProvider && emailList) {
@@ -3986,6 +3991,9 @@
             }
         }
 
+        // Declare taskFormPasteHandler before it's used
+        let taskFormPasteHandler = null;
+
         function cleanupTaskFormPasteHandler() {
             if (taskFormPasteHandler) {
                 document.removeEventListener('paste', taskFormPasteHandler);
@@ -3993,7 +4001,7 @@
             }
         }
 
-        function showSend() {
+        function showSend(event) {
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -4014,12 +4022,12 @@
             }, 100);
             document.getElementById('content-title').textContent = 'Send Email';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            if (event && event.target) {
-                event.target.classList.add('active');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
             }
         }
 
-        function showCreateCustomer() {
+        function showCreateCustomer(event) {
             cleanupTaskFormPasteHandler();
             document.getElementById('receive-mail-content').classList.add('hidden');
             document.getElementById('send-mail-content').classList.add('hidden');
@@ -4030,8 +4038,8 @@
             document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Create Customer';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            if (event && event.target) {
-                event.target.classList.add('active');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
             }
             // Ensure countries and customer sources are loaded for dropdowns
             if (COUNTRIES.length === 0) {
@@ -4045,7 +4053,7 @@
             loadCustomers(true);
         }
 
-        function showTask() {
+        function showTask(event) {
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -4062,8 +4070,8 @@
             document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Task';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            if (event && event.target) {
-            event.target.classList.add('active');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
             }
             loadTaskDisplay();
             loadTaskTypesForDropdown();
@@ -4184,7 +4192,8 @@
                         }
                     }
                     // Create new editor
-                    window.taskFormEditor = new Quill('#task-form-template-editor', {
+                    if (typeof Quill !== 'undefined') {
+                        window.taskFormEditor = new Quill('#task-form-template-editor', {
                         theme: 'snow',
                         modules: {
                             toolbar: [
@@ -4199,6 +4208,9 @@
                             ]
                         }
                     });
+                    } else {
+                        console.warn('Quill.js is not loaded. Rich text editor will not be available.');
+                    }
                 }
             }, 100);
         }
@@ -4262,7 +4274,6 @@
             });
         }
 
-        let taskFormPasteHandler = null;
         let taskFormDropzoneHandlers = { dragover: null, dragleave: null, drop: null, paste: null };
         
         function setupTaskDragAndDrop() {
@@ -4600,7 +4611,7 @@
             });
         }
 
-        function showDropdownList() {
+        function showDropdownList(event) {
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -4617,8 +4628,8 @@
             document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Dropdown List';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            if (event && event.target) {
-                event.target.classList.add('active');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
             }
             // Load task types list
             loadTaskTypes();
@@ -4652,7 +4663,7 @@
             }
         }
 
-        function showSettings() {
+        function showSettings(event) {
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -4669,8 +4680,8 @@
             document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Settings';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            if (event && event.target) {
-            event.target.classList.add('active');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
             }
             
             // Auto-open the selected profile (or profile1) to show saved settings
@@ -4689,7 +4700,7 @@
             showProfileList();
         }
 
-        function showSecurity() {
+        function showSecurity(event) {
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -4706,8 +4717,8 @@
             document.getElementById('security-content').classList.remove('hidden');
             document.getElementById('content-title').textContent = 'Security';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            if (event && event.target) {
-                event.target.classList.add('active');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
             }
             loadUsers();
         }
@@ -6567,29 +6578,42 @@
 
             // Based on dropdown selection, add the corresponding SMTP config
             if (selectedProvider === 'lcf') {
-                const lcf = smtpConfig.lcf || {};
-                const missingFields = [];
-                if (!lcf.server) missingFields.push('Server');
-                if (!lcf.port) missingFields.push('Port');
-                if (!lcf.username) missingFields.push('Username');
-                if (!lcf.password || lcf.password.trim() === '') missingFields.push('Password');
+                const lcfSmtp = smtpConfig.lcf || {};
+                const lcfImap = profile.lcf || {};
                 
-                if (missingFields.length > 0) {
-                    showSendStatus(`LCF SMTP not fully configured. Missing: ${missingFields.join(', ')}. Please go to Settings and save your LCF SMTP configuration.`, 'error');
+                // Use SMTP config if available, otherwise fall back to IMAP config
+                // (since IMAP and SMTP for the same account use the same credentials)
+                const server = lcfSmtp.server || 'smtp.qiye.163.com';
+                const port = lcfSmtp.port || 994;
+                const username = lcfSmtp.username || lcfImap.username || '';
+                const password = (lcfSmtp.password && lcfSmtp.password.trim() !== '') 
+                    ? lcfSmtp.password 
+                    : (lcfImap.password && lcfImap.password.trim() !== '' ? lcfImap.password : '');
+                const use_ssl = lcfSmtp.use_ssl !== undefined ? lcfSmtp.use_ssl : true;
+                const use_tls = lcfSmtp.use_tls !== undefined ? lcfSmtp.use_tls : false;
+                
+                // If password is not configured in frontend, don't send a config
+                // The backend will use its default SMTP_LCF_CONFIG from .env
+                if (!password || password.trim() === '') {
+                    // Don't add config - backend will use DEFAULT_SMTP_CONFIGS which includes LCF from .env
+                    // This allows sending even if password is only in backend .env file
+                } else if (!username || username.trim() === '') {
+                    showSendStatus('LCF username is required. Please configure LCF IMAP settings in Settings.', 'error');
                     return;
+                } else {
+                    // Frontend has password configured, use it
+                    configs.push({
+                        name: 'LCF SMTP',
+                        server: server,
+                        port: parseInt(port) || 994,
+                        username: username,
+                        password: password,
+                        use_ssl: use_ssl,
+                        use_tls: use_tls,
+                        sender_name: smtpConfig.sender_name,
+                        from_address: username
+                    });
                 }
-                
-                configs.push({
-                    name: 'LCF SMTP',
-                    server: lcf.server,
-                    port: parseInt(lcf.port) || 994,
-                    username: lcf.username,
-                    password: lcf.password,
-                    use_ssl: !!lcf.use_ssl,
-                    use_tls: !!lcf.use_tls,
-                    sender_name: smtpConfig.sender_name,
-                    from_address: lcf.username
-                });
             } else if (selectedProvider === '163') {
                 const primary = smtpConfig.primary || {};
                 if (primary.server && primary.username && primary.password && primary.port) {
@@ -6628,7 +6652,9 @@
                 }
             }
 
-            if (configs.length === 0) {
+            // Allow empty configs for LCF - backend will use DEFAULT_SMTP_CONFIGS from .env
+            // For other providers, require frontend configuration
+            if (configs.length === 0 && selectedProvider !== 'lcf') {
                 showSendStatus('No SMTP configuration selected or available.', 'error');
                 return;
             }
@@ -7745,6 +7771,22 @@
             if (!email) {
                 return;
             }
+            
+            // Debug: Log email fields to see what's available
+            console.log('Email object in openTaskModal:', {
+                hasHtmlBody: !!email.html_body,
+                hasPlainBody: !!email.plain_body,
+                hasContent: !!email.content,
+                hasPreview: !!email.preview,
+                htmlBodyLength: email.html_body ? String(email.html_body).length : 0,
+                plainBodyLength: email.plain_body ? String(email.plain_body).length : 0,
+                contentLength: email.content ? String(email.content).length : 0,
+                previewLength: email.preview ? String(email.preview).length : 0,
+                htmlBodyValue: email.html_body ? String(email.html_body).substring(0, 100) : null,
+                plainBodyValue: email.plain_body ? String(email.plain_body).substring(0, 100) : null,
+                previewValue: email.preview ? String(email.preview).substring(0, 100) : null,
+                allKeys: Object.keys(email)
+            });
 
             // Populate customer autocomplete
             const populateCustomerAutocomplete = () => {
@@ -7820,14 +7862,41 @@
             if (taskNotesEditor) {
                 // Create 2 blank lines
                 const blankLines = '<p><br></p><p><br></p>';
-                if (email.html_body) {
+                
+                // Helper to check if a field has actual content (not null, undefined, or empty string)
+                const hasContent = (field) => {
+                    return field !== null && field !== undefined && String(field).trim().length > 0;
+                };
+                
+                if (hasContent(email.html_body)) {
                     // Inline cid: images using attachments, then convert HTML to Quill Delta format
-                    const inlineHtml = inlineCidImages(email.html_body, email.attachments || []);
+                    const inlineHtml = inlineCidImages(String(email.html_body), email.attachments || []);
                     const delta = taskNotesEditor.clipboard.convert(blankLines + inlineHtml);
                     taskNotesEditor.setContents(delta);
-                } else if (email.plain_body) {
+                } else if (hasContent(email.plain_body)) {
                     // Set plain text content with 2 blank lines at the start
-                    taskNotesEditor.setText('\n\n' + (email.plain_body || ''));
+                    taskNotesEditor.setText('\n\n' + String(email.plain_body));
+                } else if (hasContent(email.content)) {
+                    // Check for content field (some email formats use this)
+                    let content = String(email.content);
+                    // Try to detect if it's HTML or plain text
+                    if (content.trim().startsWith('<') || content.includes('<html') || content.includes('<body')) {
+                        // It's HTML, convert to Quill Delta format
+                        const inlineHtml = inlineCidImages(content, email.attachments || []);
+                        const delta = taskNotesEditor.clipboard.convert(blankLines + inlineHtml);
+                        taskNotesEditor.setContents(delta);
+                    } else {
+                        // It's plain text
+                        taskNotesEditor.setText('\n\n' + content);
+                    }
+                } else if (hasContent(email.preview)) {
+                    // Fallback to preview field if body fields are empty
+                    let preview = String(email.preview);
+                    // Strip HTML tags from preview and set as plain text
+                    const div = document.createElement('div');
+                    div.innerHTML = preview;
+                    const textContent = div.textContent || div.innerText || preview;
+                    taskNotesEditor.setText('\n\n' + textContent.trim());
                 } else {
                     // Set just 2 blank lines
                     const blankDelta = taskNotesEditor.clipboard.convert(blankLines);
@@ -8652,15 +8721,11 @@
             document.getElementById('security-content').classList.add('hidden');
             document.getElementById('content-title').textContent = 'Task List';
             document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
-            if (event && event.target) {
-                event.target.classList.add('active');
-            } else if (event && event.currentTarget) {
+            if (event && event.currentTarget) {
                 event.currentTarget.classList.add('active');
             }
             loadTaskList();
         }
-
-        let inlineTaskEditId = null;
 
         function formatDateForInput(dateStr) {
             if (!dateStr) return '';

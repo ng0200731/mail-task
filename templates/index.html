@@ -5,8 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Receiver - v{{ version }}</title>
     <!-- Quill.js Rich Text Editor -->
-    <link href="https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.js"></script>
+    <link href="https://unpkg.com/quill@1.3.6/dist/quill.snow.css" rel="stylesheet" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.snow.css';">
+    <script src="https://unpkg.com/quill@1.3.6/dist/quill.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.js';"></script>
+    <script>
+        // Verify Quill.js loaded, try alternative CDN if needed
+        (function() {
+            var checkQuill = setInterval(function() {
+                if (typeof Quill !== 'undefined') {
+                    clearInterval(checkQuill);
+                } else if (document.readyState === 'complete') {
+                    clearInterval(checkQuill);
+                    // Try alternative CDN if Quill still not loaded
+                    if (typeof Quill === 'undefined') {
+                        var script = document.createElement('script');
+                        script.src = 'https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.js';
+                        script.onerror = function() {
+                            // Try another CDN as last resort
+                            var script2 = document.createElement('script');
+                            script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.6/quill.js';
+                            document.head.appendChild(script2);
+                        };
+                        document.head.appendChild(script);
+                    }
+                }
+            }, 100);
+            // Stop checking after 5 seconds
+            setTimeout(function() { clearInterval(checkQuill); }, 5000);
+        })();
+    </script>
     <style>
         * {
             margin: 0;
@@ -259,6 +285,13 @@
             line-clamp: 3;
             -webkit-line-clamp: 3;
             -webkit-box-orient: vertical;
+        }
+
+        .email-preview-table {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            max-width: 100%;
+            overflow: hidden;
         }
 
         .email-attachments {
@@ -1157,6 +1190,21 @@
             overflow: visible;
         }
 
+        .customer-table th[data-column="content"],
+        .customer-table tbody tr td:nth-child(5) {
+            max-width: 100%;
+            overflow: hidden;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
+        }
+        
+        .customer-table tbody tr td:nth-child(5) > * {
+            max-width: 100%;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
         .customer-table th {
             background-color: #f0f0f0;
             color: #000000;
@@ -1686,6 +1734,14 @@
                                 <div id="customer-business-type-dropdown" class="country-dropdown hidden"></div>
                             </div>
                         </div>
+                        <div class="form-group">
+                            <label for="customer-rank">Rank</label>
+                            <div class="dropdown-input-wrapper" style="position: relative;">
+                                <input type="text" id="customer-rank" placeholder="Search or select rank" autocomplete="off" oninput="filterCustomerRanks()" onfocus="showCustomerRankDropdown()" onblur="setTimeout(() => hideCustomerRankDropdown(), 200)">
+                                <span class="dropdown-arrow">▼</span>
+                                <div id="customer-rank-dropdown" class="country-dropdown hidden"></div>
+                            </div>
+                        </div>
 
                         <!-- Row 4: Attachment (new line, full width) -->
                         <div class="form-group form-group-full">
@@ -1735,6 +1791,7 @@
                                 <th style="width: 10%;">Website</th>
                                 <th style="width: 10%;">Source</th>
                                 <th style="width: 10%;">Business Type</th>
+                                <th style="width: 8%;">Rank</th>
                                 <th style="width: 12%;">Remark</th>
                                 <th style="width: 10%;">Attachments</th>
                                 <th style="width: 10%;">Created At</th>
@@ -1750,6 +1807,7 @@
                                 <th><input type="text" class="customer-filter-input" data-field="website" placeholder="Filter website"></th>
                                 <th><input type="text" class="customer-filter-input" data-field="source" placeholder="Filter source"></th>
                                 <th><input type="text" class="customer-filter-input" data-field="business_type" placeholder="Filter business type"></th>
+                                <th><input type="text" class="customer-filter-input" data-field="rank" placeholder="Filter rank"></th>
                                 <th><input type="text" class="customer-filter-input" data-field="remark" placeholder="Filter remark"></th>
                                 <th><input type="text" class="customer-filter-input" data-field="attachments" placeholder="Filter attachments"></th>
                                 <th><input type="text" class="customer-filter-input" data-field="created_at" placeholder="Filter created"></th>
@@ -1878,6 +1936,21 @@
                         </div>
                         <div id="customer-business-types-list" style="border: 1px solid #000000; padding: 15px; background-color: #ffffff;">
                             <div style="text-align: center; padding: 20px; color: #666;">Loading customer business types...</div>
+                        </div>
+                    </div>
+                    <h3 id="customer-rank-dropdown-header" style="margin-bottom: 15px; margin-top: 30px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px;" onclick="toggleCustomerRankDropdown()">
+                        <span id="customer-rank-dropdown-icon" style="display: inline-block; transition: transform 0.2s;">▶</span>
+                        <span>Create Customer - Rank</span>
+                    </h3>
+                    <div id="customer-rank-dropdown-content" style="display: none;">
+                        <div style="margin-bottom: 20px; position: relative;">
+                            <input type="text" id="new-customer-rank-input" placeholder="Enter new rank name" style="width: 300px; padding: 8px; border: 1px solid #000000; margin-right: 10px;" onkeypress="if(event.key === 'Enter') addCustomerRank()" oninput="showCustomerRankSuggestions()" onfocus="showCustomerRankSuggestions()" onblur="setTimeout(() => hideCustomerRankSuggestions(), 200)">
+                            <div id="customer-rank-suggestions" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; width: 300px; z-index: 1000;"></div>
+                            <button class="form-button" onclick="addCustomerRank()" style="padding: 8px 20px;">Add New Rank</button>
+                            <div id="customer-rank-duplicate-warning" style="color: #dc3545; font-size: 12px; margin-top: 5px; display: none;"></div>
+                        </div>
+                        <div id="customer-ranks-list" style="border: 1px solid #000000; padding: 15px; background-color: #ffffff;">
+                            <div style="text-align: center; padding: 20px; color: #666;">Loading customer ranks...</div>
                         </div>
                     </div>
                     <h3 id="task-status-dropdown-header" style="margin-bottom: 15px; margin-top: 30px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px;" onclick="toggleTaskStatusDropdown()">
@@ -2480,7 +2553,8 @@
                     <label for="task-extra-info">Extra Information <span style="color: #666; font-weight: normal;">(Optional)</span></label>
                     <textarea id="task-extra-info" rows="3" style="width: 100%; padding: 8px; border: 1px solid #000000; font-family: Arial, sans-serif; font-size: 13px; resize: vertical; margin-bottom: 15px;" placeholder="Enter extra information here..."></textarea>
                     <label for="task-notes">Context</label>
-                    <div id="task-notes-editor" style="height: 300px; background-color: #ffffff; margin-bottom: 15px;"></div>
+                    <div id="task-notes-editor" style="height: 500px; background-color: #ffffff; margin-bottom: 15px;"></div>
+                    <textarea id="task-notes-textarea" style="display: none; width: 100%; height: 500px; padding: 8px; border: 1px solid #000000; font-family: Arial, sans-serif; font-size: 13px; resize: vertical; margin-bottom: 15px;" placeholder="Email content will appear here..."></textarea>
                     <div id="task-email-details" style="padding: 12px; background-color: #f5f5f5; border: 1px solid #d0d0d0; font-family: Arial, sans-serif; font-size: 13px; color: #333; display: none;">
                         <div style="margin-bottom: 8px;"><strong>寄件者:</strong> <span id="task-email-from"></span></div>
                         <div style="margin-bottom: 8px;"><strong>寄件日期:</strong> <span id="task-email-date"></span></div>
@@ -2654,7 +2728,15 @@
                 }
             });
         } else if (taskNotesEditorDiv && typeof Quill === 'undefined') {
-            console.warn('Quill.js is not loaded. Rich text editor for task notes will not be available.');
+            console.warn('Quill.js is not loaded. Rich text editor for task notes will not be available. Using textarea fallback.');
+            // Show textarea fallback and hide Quill div
+            const taskNotesTextarea = document.getElementById('task-notes-textarea');
+            if (taskNotesTextarea) {
+                taskNotesTextarea.style.display = 'block';
+            }
+            if (taskNotesEditorDiv) {
+                taskNotesEditorDiv.style.display = 'none';
+            }
         }
 
         let editTaskEditor = null;
@@ -2889,6 +2971,8 @@
         // Customer business types list - will be populated from database
         let CUSTOMER_BUSINESS_TYPES = [];
         let customerBusinessTypesCache = [];
+        // Customer ranks list - will be populated from database
+        let CUSTOMER_RANKS = ['A', 'B', 'C', 'D'];
         const PROVIDER_LABELS = {
             gmail: 'Gmail',
             qq: 'QQ',
@@ -2992,44 +3076,113 @@
             return grouped;
         }
 
+        // Proactively clean up old email cache to prevent quota issues
+        function cleanupOldEmailCache(daysToKeep = 7) {
+            try {
+                const emailKeysWithDates = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('emails:')) {
+                        const parts = key.split(':');
+                        if (parts.length >= 3) {
+                            const dateStr = parts.slice(2).join(':');
+                            emailKeysWithDates.push({ key, date: dateStr });
+                        }
+                    }
+                }
+                // Sort by date (newest first)
+                emailKeysWithDates.sort((a, b) => b.date.localeCompare(a.date));
+
+                // Keep only the most recent days
+                const keysToKeep = emailKeysWithDates.slice(0, daysToKeep).map(item => item.key);
+                emailKeysWithDates.forEach(item => {
+                    if (!keysToKeep.includes(item.key)) {
+                        try {
+                            localStorage.removeItem(item.key);
+                        } catch (e) {
+                            // Ignore errors
+                        }
+                    }
+                });
+            } catch (error) {
+                // Silently handle errors
+            }
+        }
+
         function cacheEmails(provider, emails) {
             if (!provider) {
                 return;
             }
             try {
+                // Proactively clean up old cache before storing new data
+                cleanupOldEmailCache();
+
                 const grouped = groupEmailsByDate(emails);
                 Object.entries(grouped).forEach(([dateKey, list]) => {
                     const storageKey = `emails:${provider}:${dateKey}`;
                     try {
                         // Limit the number of emails cached to prevent QuotaExceededError
-                        // Only cache last 40 emails per day to avoid exceeding localStorage quota
-                        const limitedList = list.slice(-40);
+                        // Only cache last 20 emails per day to avoid exceeding localStorage quota
+                        const limitedList = list.slice(-20);
                         const dataToStore = JSON.stringify({ date: dateKey, emails: limitedList });
                         localStorage.setItem(storageKey, dataToStore);
                     } catch (storageError) {
-                        // If storage fails, try to clear old data; skip retry to avoid ReferenceError / extra quota pressure
-                        if (storageError.name === 'QuotaExceededError') {
-                            console.warn(`localStorage quota exceeded for ${storageKey}, clearing old cache`);
+                        // Handle quota exceeded or tracking prevention errors
+                        if (storageError.name === 'QuotaExceededError' || storageError.name === 'SecurityError') {
+                            // Silently handle tracking prevention - it's a browser privacy feature
+                            if (storageError.name === 'SecurityError') {
+                                return; // Skip caching if tracking prevention is active
+                            }
+                            // For quota exceeded, implement smarter cleanup
                             try {
-                                const keysToRemove = [];
+                                // Get all email cache keys with their dates
+                                const emailKeysWithDates = [];
                                 for (let i = 0; i < localStorage.length; i++) {
                                     const key = localStorage.key(i);
                                     if (key && key.startsWith('emails:')) {
-                                        keysToRemove.push(key);
+                                        // Extract date from key format: emails:provider:YYYY-MM-DD
+                                        const parts = key.split(':');
+                                        if (parts.length >= 3) {
+                                            const dateStr = parts.slice(2).join(':'); // Handle dates with colons if any
+                                            emailKeysWithDates.push({ key, date: dateStr });
+                                        }
                                     }
                                 }
-                                keysToRemove.forEach(k => localStorage.removeItem(k));
+                                // Sort by date (newest first) - keep last 5 days, remove older
+                                emailKeysWithDates.sort((a, b) => {
+                                    // Compare dates as strings (YYYY-MM-DD format sorts correctly)
+                                    return b.date.localeCompare(a.date);
+                                });
+                                const keysToKeep = emailKeysWithDates.slice(0, 5).map(item => item.key); // Keep 5 most recent date keys
+                                emailKeysWithDates.forEach(item => {
+                                    if (!keysToKeep.includes(item.key)) {
+                                        try {
+                                            localStorage.removeItem(item.key);
+                                        } catch (e) {
+                                            // Ignore errors when removing items
+                                        }
+                                    }
+                                });
+                                // Retry storing with reduced data
+                                const limitedList = list.slice(-10); // Further reduce to 10 emails
+                                const dataToStore = JSON.stringify({ date: dateKey, emails: limitedList });
+                                localStorage.setItem(storageKey, dataToStore);
                             } catch (clearError) {
-                                console.error('Failed to clear old email cache keys:', clearError);
+                                // Silently fail if cleanup also fails
                             }
-                        } else {
-                            console.error(`Failed to cache emails for ${dateKey}:`, storageError);
                         }
                     }
                 });
-                localStorage.setItem('lastEmailProvider', provider);
+                try {
+                    localStorage.setItem('lastEmailProvider', provider);
+                } catch (e) {
+                    // Silently handle tracking prevention for lastEmailProvider
+                }
             } catch (error) {
-                console.error('Failed to cache emails', error);
+                // Silently handle tracking prevention or other storage errors
+                if (error.name !== 'SecurityError') {
+                    console.error('Failed to cache emails', error);
+                }
             }
         }
 
@@ -3039,14 +3192,21 @@
                 const dateKeys = [getTodayKey(), getYesterdayKey()];
                 const collected = [];
                 dateKeys.forEach(dateKey => {
-                    const storageKey = `emails:${provider}:${dateKey}`;
-                    const raw = localStorage.getItem(storageKey);
-                    if (!raw) return;
-                    const parsed = JSON.parse(raw);
-                    if (parsed?.date === dateKey && Array.isArray(parsed.emails)) {
-                        parsed.emails.forEach(email => {
-                            collected.push(ensureEmailSequence({ ...email }));
-                        });
+                    try {
+                        const storageKey = `emails:${provider}:${dateKey}`;
+                        const raw = localStorage.getItem(storageKey);
+                        if (!raw) return;
+                        const parsed = JSON.parse(raw);
+                        if (parsed?.date === dateKey && Array.isArray(parsed.emails)) {
+                            parsed.emails.forEach(email => {
+                                collected.push(ensureEmailSequence({ ...email }));
+                            });
+                        }
+                    } catch (e) {
+                        // Silently handle tracking prevention or other per-key errors
+                        if (e.name !== 'SecurityError') {
+                            console.warn('Failed to load cached emails for date:', dateKey, e);
+                        }
                     }
                 });
                 if (collected.length === 0) return null;
@@ -3058,7 +3218,10 @@
                 });
                 return sorted.slice(0, 40);
             } catch (error) {
-                console.error('Failed to load cached emails', error);
+                // Silently handle tracking prevention
+                if (error.name !== 'SecurityError') {
+                    console.error('Failed to load cached emails', error);
+                }
             }
             return null;
         }
@@ -3363,7 +3526,12 @@
             await new Promise(resolve => setTimeout(resolve, 100));
             
             const candidates = [];
-            const lastProvider = localStorage.getItem('lastEmailProvider');
+            let lastProvider = null;
+            try {
+                lastProvider = localStorage.getItem('lastEmailProvider');
+            } catch (e) {
+                // Silently handle tracking prevention
+            }
             const errors = [];
             
             // Always prefer LCF first for initial Receive Mail view, so that by
@@ -3938,6 +4106,8 @@
             loadCountries();
             // Load customer sources for dropdown
             loadCustomerSources();
+            // Load customer ranks for dropdown
+            loadCustomerRanks();
             document.addEventListener('keydown', (evt) => {
                 if (evt.key === 'Escape' && !emailModal.classList.contains('hidden')) {
                     closeEmailModal();
@@ -7022,6 +7192,10 @@
                                     Date
                                     <span class="email-col-resizer" data-column="date"></span>
                                 </th>
+                                <th style="width: ${layout.company}%; min-width: 120px;" data-column="company">
+                                    Company name
+                                    <span class="email-col-resizer" data-column="company"></span>
+                                </th>
                                 <th style="width: ${layout.name}%; min-width: 120px;" data-column="name">
                                     Name
                                     <span class="email-col-resizer" data-column="name"></span>
@@ -7030,13 +7204,9 @@
                                     Title
                                     <span class="email-col-resizer" data-column="title"></span>
                                 </th>
-                                <th style="width: ${layout.content}%; min-width: 120px;" data-column="content">
+                                <th style="width: ${layout.company}%; min-width: 120px;" data-column="content">
                                     Content
                                     <span class="email-col-resizer" data-column="content"></span>
-                                </th>
-                                <th style="width: ${layout.company}%; min-width: 120px;" data-column="company">
-                                    Company name
-                                    <span class="email-col-resizer" data-column="company"></span>
                                 </th>
                                 <th style="width: ${layout.attachments}%; min-width: 120px;" data-column="attachments">
                                     Attachments
@@ -7045,10 +7215,10 @@
                             </tr>
                             <tr class="email-filter-row">
                                 <th><input id="email-filter-date" class="customer-filter-input" type="text" placeholder="Filter date" value="${escapeHtml(savedFilterValues.date)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
+                                <th><input id="email-filter-company" class="customer-filter-input" type="text" placeholder="Filter company" value="${escapeHtml(savedFilterValues.company)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                                 <th><input id="email-filter-name" class="customer-filter-input" type="text" placeholder="Filter name" value="${escapeHtml(savedFilterValues.name)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                                 <th><input id="email-filter-title" class="customer-filter-input" type="text" placeholder="Filter title" value="${escapeHtml(savedFilterValues.title)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                                 <th><input id="email-filter-content" class="customer-filter-input" type="text" placeholder="Filter content" value="${escapeHtml(savedFilterValues.content)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
-                                <th><input id="email-filter-company" class="customer-filter-input" type="text" placeholder="Filter company" value="${escapeHtml(savedFilterValues.company)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                                 <th><input id="email-filter-attachments" class="customer-filter-input" type="text" placeholder="Filter attachments" value="${escapeHtml(savedFilterValues.attachments)}" oninput="filterEmailTable()" style="color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc !important; -webkit-text-fill-color: #000000 !important; opacity: 1 !important; z-index: 10 !important; position: relative !important;"></th>
                             </tr>
                             <tr class="filter-status-row" style="background-color: #f5f5f5; font-size: 12px; color: #666;">
@@ -7086,10 +7256,14 @@
                                 const customer = findCustomerByEmail(email.from || '');
                                 const companyName = customer && customer.company_name ? customer.company_name : 'new customer';
                                 const safeCompanyName = escapeHtml(companyName);
+                                const companyDisplay = companyName === 'new customer' 
+                                    ? `<span style="color: red;">${safeCompanyName}</span>` 
+                                    : safeCompanyName;
                                 
                                 return `
                                     <tr class="email-row" data-index="${index}">
                                         <td>${escapeHtml(formatEmailDate(email.date || ''))}</td>
+                                        <td>${companyDisplay}</td>
                                         <td>${escapeHtml(displayName || '')}</td>
                                         <td>${safeSubject || '<span style="color: #999; font-style: italic;">No subject</span>'}</td>
                                         <td>
@@ -7098,7 +7272,6 @@
                                                 ${truncated ? `<a href="#" class="email-read-more" data-index="${index}">Read more</a>` : ''}
                                             </div>
                                         </td>
-                                        <td>${safeCompanyName}</td>
                                         <td>
                                             <div class="email-attachments">
                                                 ${attachmentHtml}
@@ -7800,7 +7973,16 @@
             }
             const email = currentEmails[index];
             if (!email) {
+                console.error('Email not found at index:', index, 'currentEmails length:', currentEmails ? currentEmails.length : 0);
                 return;
+            }
+            
+            // Clear Quill editor first to ensure fresh content is loaded
+            if (taskNotesEditor) {
+                // Use setTimeout to ensure editor is ready
+                setTimeout(() => {
+                    taskNotesEditor.setContents([{ insert: '\n' }]);
+                }, 0);
             }
             
             // Debug: Log email fields to see what's available
@@ -7809,14 +7991,22 @@
                 hasPlainBody: !!email.plain_body,
                 hasContent: !!email.content,
                 hasPreview: !!email.preview,
+                hasBody: !!email.body,
+                hasText: !!email.text,
                 htmlBodyLength: email.html_body ? String(email.html_body).length : 0,
                 plainBodyLength: email.plain_body ? String(email.plain_body).length : 0,
                 contentLength: email.content ? String(email.content).length : 0,
                 previewLength: email.preview ? String(email.preview).length : 0,
+                bodyLength: email.body ? String(email.body).length : 0,
+                textLength: email.text ? String(email.text).length : 0,
                 htmlBodyValue: email.html_body ? String(email.html_body).substring(0, 100) : null,
                 plainBodyValue: email.plain_body ? String(email.plain_body).substring(0, 100) : null,
+                contentValue: email.content ? String(email.content).substring(0, 100) : null,
+                bodyValue: email.body ? String(email.body).substring(0, 100) : null,
+                textValue: email.text ? String(email.text).substring(0, 100) : null,
                 previewValue: email.preview ? String(email.preview).substring(0, 100) : null,
-                allKeys: Object.keys(email)
+                allKeys: Object.keys(email),
+                fullEmail: email
             });
 
             // Populate customer autocomplete
@@ -7890,7 +8080,48 @@
             }
             
             // Copy email content to rich text editor with 2 blank lines at the start
-            if (taskNotesEditor) {
+            // Use a function to load content, called after modal is shown to ensure editor is ready
+            const loadEmailContent = () => {
+                const taskNotesTextarea = document.getElementById('task-notes-textarea');
+                const useTextarea = !taskNotesEditor && taskNotesTextarea && taskNotesTextarea.style.display !== 'none';
+                
+                if (!taskNotesEditor && !useTextarea) {
+                    console.warn('taskNotesEditor is not available and textarea fallback is not available');
+                    return;
+                }
+                
+                // Helper function to set content (works with both Quill and textarea)
+                const setContent = (text) => {
+                    if (taskNotesEditor) {
+                        taskNotesEditor.setText(text);
+                    } else if (taskNotesTextarea) {
+                        taskNotesTextarea.value = text;
+                    }
+                };
+                
+                const setHtmlContent = (html) => {
+                    if (taskNotesEditor) {
+                        try {
+                            const blankLines = '<p><br></p><p><br></p>';
+                            const inlineHtml = inlineCidImages(html, email.attachments || []);
+                            const delta = taskNotesEditor.clipboard.convert(blankLines + inlineHtml);
+                            taskNotesEditor.setContents(delta);
+                        } catch (e) {
+                            // Fallback to plain text if HTML conversion fails
+                            const div = document.createElement('div');
+                            div.innerHTML = html;
+                            const text = div.textContent || div.innerText || html;
+                            taskNotesEditor.setText('\n\n' + text);
+                        }
+                    } else if (taskNotesTextarea) {
+                        // Strip HTML tags for textarea
+                        const div = document.createElement('div');
+                        div.innerHTML = html;
+                        const text = div.textContent || div.innerText || html;
+                        taskNotesTextarea.value = '\n\n' + text;
+                    }
+                };
+                
                 // Create 2 blank lines
                 const blankLines = '<p><br></p><p><br></p>';
                 
@@ -7899,41 +8130,118 @@
                     return field !== null && field !== undefined && String(field).trim().length > 0;
                 };
                 
+                let contentLoaded = false;
+                
+                // Try html_body first (for HTML emails)
                 if (hasContent(email.html_body)) {
-                    // Inline cid: images using attachments, then convert HTML to Quill Delta format
-                    const inlineHtml = inlineCidImages(String(email.html_body), email.attachments || []);
-                    const delta = taskNotesEditor.clipboard.convert(blankLines + inlineHtml);
-                    taskNotesEditor.setContents(delta);
-                } else if (hasContent(email.plain_body)) {
-                    // Set plain text content with 2 blank lines at the start
-                    taskNotesEditor.setText('\n\n' + String(email.plain_body));
-                } else if (hasContent(email.content)) {
-                    // Check for content field (some email formats use this)
-                    let content = String(email.content);
-                    // Try to detect if it's HTML or plain text
-                    if (content.trim().startsWith('<') || content.includes('<html') || content.includes('<body')) {
-                        // It's HTML, convert to Quill Delta format
-                        const inlineHtml = inlineCidImages(content, email.attachments || []);
-                        const delta = taskNotesEditor.clipboard.convert(blankLines + inlineHtml);
-                        taskNotesEditor.setContents(delta);
-                    } else {
-                        // It's plain text
-                        taskNotesEditor.setText('\n\n' + content);
+                    try {
+                        setHtmlContent(String(email.html_body));
+                        contentLoaded = true;
+                    } catch (e) {
+                        console.error('Error loading html_body:', e);
                     }
-                } else if (hasContent(email.preview)) {
-                    // Fallback to preview field if body fields are empty
-                    let preview = String(email.preview);
-                    // Strip HTML tags from preview and set as plain text
-                    const div = document.createElement('div');
-                    div.innerHTML = preview;
-                    const textContent = div.textContent || div.innerText || preview;
-                    taskNotesEditor.setText('\n\n' + textContent.trim());
-                } else {
-                    // Set just 2 blank lines
-                    const blankDelta = taskNotesEditor.clipboard.convert(blankLines);
-                    taskNotesEditor.setContents(blankDelta);
                 }
-            }
+                
+                // Try plain_body if html_body didn't work
+                if (!contentLoaded && hasContent(email.plain_body)) {
+                    try {
+                        setContent('\n\n' + String(email.plain_body));
+                        contentLoaded = true;
+                    } catch (e) {
+                        console.error('Error loading plain_body:', e);
+                    }
+                }
+                
+                // Try content field (some email formats use this)
+                if (!contentLoaded && hasContent(email.content)) {
+                    try {
+                        let content = String(email.content);
+                        // Try to detect if it's HTML or plain text
+                        if (content.trim().startsWith('<') || content.includes('<html') || content.includes('<body')) {
+                            setHtmlContent(content);
+                        } else {
+                            setContent('\n\n' + content);
+                        }
+                        contentLoaded = true;
+                    } catch (e) {
+                        console.error('Error loading content field:', e);
+                    }
+                }
+                
+                // Try body field (alternative name)
+                if (!contentLoaded && hasContent(email.body)) {
+                    try {
+                        let body = String(email.body);
+                        if (body.trim().startsWith('<') || body.includes('<html') || body.includes('<body')) {
+                            setHtmlContent(body);
+                        } else {
+                            setContent('\n\n' + body);
+                        }
+                        contentLoaded = true;
+                    } catch (e) {
+                        console.error('Error loading body field:', e);
+                    }
+                }
+                
+                // Try text field (alternative name)
+                if (!contentLoaded && hasContent(email.text)) {
+                    try {
+                        setContent('\n\n' + String(email.text));
+                        contentLoaded = true;
+                    } catch (e) {
+                        console.error('Error loading text field:', e);
+                    }
+                }
+                
+                // Use extractEmailBodyText as fallback (this function knows how to extract from various fields)
+                if (!contentLoaded) {
+                    try {
+                        const bodyText = extractEmailBodyText(email);
+                        if (bodyText && bodyText.trim().length > 0) {
+                            setContent('\n\n' + bodyText);
+                            contentLoaded = true;
+                        }
+                    } catch (e) {
+                        console.error('Error using extractEmailBodyText:', e);
+                    }
+                }
+                
+                // Try preview field as last resort
+                if (!contentLoaded && hasContent(email.preview)) {
+                    try {
+                        let preview = String(email.preview);
+                        // Strip HTML tags from preview and set as plain text
+                        const div = document.createElement('div');
+                        div.innerHTML = preview;
+                        const textContent = div.textContent || div.innerText || preview;
+                        if (textContent && textContent.trim().length > 0) {
+                            setContent('\n\n' + textContent.trim());
+                            contentLoaded = true;
+                        }
+                    } catch (e) {
+                        console.error('Error loading preview field:', e);
+                    }
+                }
+                
+                // If nothing worked, set just 2 blank lines
+                if (!contentLoaded) {
+                    console.warn('No email content found. Available fields:', Object.keys(email));
+                    console.warn('Email object:', email);
+                    if (taskNotesEditor) {
+                        try {
+                            const blankDelta = taskNotesEditor.clipboard.convert(blankLines);
+                            taskNotesEditor.setContents(blankDelta);
+                        } catch (e) {
+                            console.error('Error setting blank content:', e);
+                        }
+                    } else if (taskNotesTextarea) {
+                        taskNotesTextarea.value = '\n\n';
+                    }
+                }
+            };
+            
+            // Load content after a short delay to ensure editor is ready
+            setTimeout(loadEmailContent, 100);
 
             // Store email for later use (store the full email object)
             window.currentTaskEmail = email;
@@ -8344,6 +8652,34 @@
             window.taskModalEmailIndex = null;
             window.currentTaskEmail = null;
             
+            // Clear Quill editor content
+            if (taskNotesEditor) {
+                taskNotesEditor.setContents([{ insert: '\n' }]);
+            }
+            // Clear textarea fallback
+            const taskNotesTextarea = document.getElementById('task-notes-textarea');
+            if (taskNotesTextarea) {
+                taskNotesTextarea.value = '';
+            }
+            
+            // Clear other form fields
+            if (taskSequenceInput) {
+                taskSequenceInput.value = '';
+            }
+            if (taskCustomerSelect) {
+                taskCustomerSelect.value = '';
+            }
+            const taskCustomerValueInput = document.getElementById('task-customer-value');
+            if (taskCustomerValueInput) {
+                taskCustomerValueInput.value = '';
+            }
+            if (taskEmailInput) {
+                taskEmailInput.value = '';
+            }
+            if (taskCatalogueInput) {
+                taskCatalogueInput.value = '';
+            }
+            
             // Clear file input
             const followUpFileInput = document.getElementById('follow-up-attachment-file-input');
             if (followUpFileInput) {
@@ -8664,6 +9000,12 @@
             if (taskNotesEditor) {
                 const delta = taskNotesEditor.getContents();
                 template = taskNotesEditor.root.innerHTML;
+            } else {
+                // Fallback to textarea if Quill is not available
+                const taskNotesTextarea = document.getElementById('task-notes-textarea');
+                if (taskNotesTextarea) {
+                    template = taskNotesTextarea.value;
+                }
             }
             const sequence = taskSequenceInput.value;
             const customerValueInput = document.getElementById('task-customer-value');
@@ -10359,6 +10701,328 @@
                 });
         }
 
+        let customerRanksCache = [];
+
+        function loadCustomerRanks() {
+            fetch('/api/customer-ranks')
+                .then(response => {
+                    if (!response.ok) {
+                        // Try to parse error response, but handle cases where it might not be JSON
+                        return response.text().then(text => {
+                            let errorData;
+                            try {
+                                errorData = JSON.parse(text);
+                            } catch (e) {
+                                errorData = { error: text || `HTTP ${response.status}: ${response.statusText}` };
+                            }
+                            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(ranks => {
+                    if (!Array.isArray(ranks)) {
+                        throw new Error('Invalid response format from server');
+                    }
+                    customerRanksCache = ranks;
+                    renderCustomerRanksList(ranks);
+                    updateCustomerRankDropdown(ranks);
+                })
+                .catch(error => {
+                    console.error('Error loading customer ranks:', error);
+                    // Keep default ranks if API fails
+                    CUSTOMER_RANKS = ['A', 'B', 'C', 'D'];
+                    const container = document.getElementById('customer-ranks-list');
+                    if (container) {
+                        const errorMsg = error.message || error.error || 'Error loading customer ranks. Please check the browser console for details.';
+                        container.innerHTML = `<div style="padding: 20px; color: #dc3545;">Error: ${escapeHtml(errorMsg)}<br><small>If this persists, the database may need to be initialized. Check server logs.</small></div>`;
+                    }
+                });
+        }
+        let currentCustomerRankDragId = null;
+
+        function toggleCustomerRankDropdown() {
+            const header = document.getElementById('customer-rank-dropdown-header');
+            const content = document.getElementById('customer-rank-dropdown-content');
+            const icon = document.getElementById('customer-rank-dropdown-icon');
+            if (!header || !content || !icon) return;
+            
+            if (content.style.display === 'none' || !content.style.display) {
+                content.style.display = 'block';
+                icon.textContent = '▼';
+                icon.style.transform = 'rotate(90deg)';
+                loadCustomerRanks();
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▶';
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function renderCustomerRanksList(ranks) {
+            const container = document.getElementById('customer-ranks-list');
+            if (!container) return;
+            
+            if (!ranks || ranks.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">No customer ranks found. Add one above.</div>';
+                return;
+            }
+            
+            // Sort by display_order
+            const sortedRanks = [...ranks].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            
+            container.innerHTML = sortedRanks.map(rank => `
+                <div class="task-type-item" draggable="true" 
+                     ondragstart="currentCustomerRankDragId = ${rank.id}; event.dataTransfer.effectAllowed = 'move';" 
+                     ondragover="event.preventDefault(); event.dataTransfer.dropEffect = 'move';" 
+                     ondrop="handleCustomerRankDrop(event, ${rank.id})" 
+                     ondragenter="event.preventDefault(); this.style.backgroundColor = '#e0e0e0';" 
+                     ondragleave="this.style.backgroundColor = '';" 
+                     style="padding: 10px; margin-bottom: 5px; border: 1px solid #ddd; background-color: #f9f9f9; cursor: move; display: flex; align-items: center; gap: 10px;">
+                    <span style="cursor: move; user-select: none;">☰</span>
+                    <input type="text" id="customer-rank-name-${rank.id}" value="${escapeHtml(rank.name)}" 
+                           style="flex: 1; padding: 5px; border: 1px solid #000000;" 
+                           onblur="updateCustomerRank(${rank.id})">
+                    <div style="margin-left: 15px; display: flex; gap: 5px;">
+                        <button class="form-button" onclick="updateCustomerRank(${rank.id})" style="padding: 5px 15px; font-size: 12px;">Save</button>
+                        <button class="form-button" onclick="deleteCustomerRank(${rank.id})" style="padding: 5px 15px; font-size: 12px; background-color: #dc3545; color: white;">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showCustomerRankSuggestions() {
+            const input = document.getElementById('new-customer-rank-input');
+            const suggestionsDiv = document.getElementById('customer-rank-suggestions');
+            const warningDiv = document.getElementById('customer-rank-duplicate-warning');
+            
+            if (!input || !suggestionsDiv) return;
+            
+            const query = input.value.trim().toLowerCase();
+            
+            if (!query) {
+                suggestionsDiv.classList.add('hidden');
+                warningDiv.style.display = 'none';
+                return;
+            }
+            
+            // Check for duplicates
+            const existingRanks = customerRanksCache || [];
+            const isDuplicate = existingRanks.some(rank => 
+                rank.name.toLowerCase() === query
+            );
+            
+            if (isDuplicate) {
+                suggestionsDiv.classList.add('hidden');
+                warningDiv.textContent = 'This customer rank already exists!';
+                warningDiv.style.display = 'block';
+                input.style.borderColor = '#dc3545';
+                return;
+            } else {
+                warningDiv.style.display = 'none';
+                input.style.borderColor = '#000000';
+            }
+            
+            // Show similar suggestions
+            const similar = existingRanks
+                .filter(rank => rank.name.toLowerCase().includes(query))
+                .slice(0, 5);
+            
+            if (similar.length === 0) {
+                suggestionsDiv.classList.add('hidden');
+                return;
+            }
+            
+            suggestionsDiv.innerHTML = similar.map(rank => 
+                `<div class="country-dropdown-item" onclick="selectCustomerRankSuggestion('${rank.name.replace(/'/g, "\\'")}')">${escapeHtml(rank.name)}</div>`
+            ).join('');
+            suggestionsDiv.classList.remove('hidden');
+        }
+
+        function hideCustomerRankSuggestions() {
+            const suggestionsDiv = document.getElementById('customer-rank-suggestions');
+            if (suggestionsDiv) {
+                suggestionsDiv.classList.add('hidden');
+            }
+        }
+
+        function selectCustomerRankSuggestion(name) {
+            const input = document.getElementById('new-customer-rank-input');
+            if (input) {
+                input.value = name;
+            }
+            hideCustomerRankSuggestions();
+            showCustomerRankSuggestions(); // Re-check for duplicates
+        }
+
+        function addCustomerRank() {
+            const input = document.getElementById('new-customer-rank-input');
+            const warningDiv = document.getElementById('customer-rank-duplicate-warning');
+            if (!input) return;
+            
+            const name = input.value.trim();
+            if (!name) {
+                alert('Customer rank name cannot be empty');
+                return;
+            }
+            
+            // Check for duplicates before submitting
+            const existingRanks = customerRanksCache || [];
+            const isDuplicate = existingRanks.some(rank => 
+                rank.name.toLowerCase() === name.toLowerCase()
+            );
+            
+            if (isDuplicate) {
+                warningDiv.textContent = 'This customer rank already exists!';
+                warningDiv.style.display = 'block';
+                input.style.borderColor = '#dc3545';
+                input.focus();
+                return;
+            }
+            
+            fetch('/api/customer-ranks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    if (data.error.includes('already exists')) {
+                        warningDiv.textContent = 'This customer rank already exists!';
+                        warningDiv.style.display = 'block';
+                        input.style.borderColor = '#dc3545';
+                        input.focus();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } else {
+                    input.value = '';
+                    warningDiv.style.display = 'none';
+                    input.style.borderColor = '#000000';
+                    hideCustomerRankSuggestions();
+                    loadCustomerRanks();
+                    setTimeout(() => {
+                        const suggestionsDiv = document.getElementById('customer-rank-suggestions');
+                        if (suggestionsDiv) {
+                            suggestionsDiv.classList.add('hidden');
+                        }
+                    }, 100);
+                }
+            })
+            .catch(error => {
+                alert('Error adding customer rank: ' + error.message);
+            });
+        }
+
+        function updateCustomerRank(rankId) {
+            const nameInput = document.getElementById(`customer-rank-name-${rankId}`);
+            const name = nameInput.value.trim();
+            
+            if (!name) {
+                alert('Customer rank name cannot be empty');
+                loadCustomerRanks(); // Reload to reset
+                return;
+            }
+            
+            // Find current rank to preserve display_order
+            const currentRank = customerRanksCache.find(r => r.id === rankId);
+            if (!currentRank) {
+                alert('Customer rank not found');
+                loadCustomerRanks();
+                return;
+            }
+            
+            fetch(`/api/customer-ranks/${rankId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    name: name,
+                    display_order: currentRank.display_order || 0
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    if (data.error.includes('already exists')) {
+                        alert('A customer rank with this name already exists!');
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                    loadCustomerRanks(); // Reload to reset
+                } else {
+                    loadCustomerRanks();
+                }
+            })
+            .catch(error => {
+                alert('Error updating customer rank: ' + error.message);
+                loadCustomerRanks(); // Reload to reset
+            });
+        }
+
+        function deleteCustomerRank(rankId) {
+            if (!confirm('Are you sure you want to delete this customer rank?')) {
+                return;
+            }
+            
+            fetch(`/api/customer-ranks/${rankId}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    loadCustomerRanks();
+                }
+            })
+            .catch(error => {
+                alert('Error deleting customer rank: ' + error.message);
+            });
+        }
+
+        function handleCustomerRankDrop(event, targetRankId) {
+            event.preventDefault();
+            const draggedRankId = currentCustomerRankDragId;
+            if (!draggedRankId || draggedRankId === targetRankId) return;
+            
+            const draggedRank = customerRanksCache.find(r => r.id === draggedRankId);
+            const targetRank = customerRanksCache.find(r => r.id === targetRankId);
+            if (!draggedRank || !targetRank) return;
+            
+            // Swap display_order values
+            const tempOrder = draggedRank.display_order;
+            draggedRank.display_order = targetRank.display_order;
+            targetRank.display_order = tempOrder;
+            
+            // Update both ranks
+            Promise.all([
+                fetch(`/api/customer-ranks/${draggedRankId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        name: draggedRank.name,
+                        display_order: draggedRank.display_order
+                    })
+                }),
+                fetch(`/api/customer-ranks/${targetRankId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        name: targetRank.name,
+                        display_order: targetRank.display_order
+                    })
+                })
+            ])
+            .then(() => {
+                loadCustomerRanks();
+            })
+            .catch(error => {
+                alert('Error reordering customer ranks: ' + error.message);
+                loadCustomerRanks();
+            });
+        }
+
         let currentCustomerBusinessTypeDragId = null;
 
         function renderCustomerBusinessTypesList(types) {
@@ -10635,6 +11299,21 @@
             CUSTOMER_BUSINESS_TYPES = sortedTypes.map(t => t.name);
         }
 
+        function updateCustomerRankDropdown(ranks) {
+            // Sort by display_order
+            const sortedRanks = [...ranks].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            
+            // Update CUSTOMER_RANKS array for the rank input field
+            CUSTOMER_RANKS = sortedRanks.map(r => r.name);
+            
+            // If rank dropdown is visible, refresh it
+            const rankInput = document.getElementById('customer-rank');
+            const rankDropdown = document.getElementById('customer-rank-dropdown');
+            if (rankInput && rankDropdown && !rankDropdown.classList.contains('hidden')) {
+                filterCustomerRanks();
+            }
+        }
+
         function updateTaskStatusDropdowns() {
             fetch('/api/task-statuses')
                 .then(response => response.json())
@@ -10839,6 +11518,96 @@
                 input.value = type;
             }
             hideCustomerBusinessTypeDropdown();
+        }
+
+        // Customer rank dropdown functions for Create Customer form
+        function filterCustomerRanks() {
+            const input = document.getElementById('customer-rank');
+            const dropdown = document.getElementById('customer-rank-dropdown');
+            if (!input || !dropdown) return;
+            
+            // Ensure customer ranks are loaded
+            if (CUSTOMER_RANKS.length === 0) {
+                fetch('/api/customer-ranks')
+                    .then(response => response.json())
+                    .then(ranks => {
+                        const sortedRanks = [...ranks].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        CUSTOMER_RANKS = sortedRanks.map(r => r.name);
+                        filterCustomerRanks(); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading customer ranks:', error);
+                        CUSTOMER_RANKS = ['A', 'B', 'C', 'D']; // Fallback to default ranks
+                        filterCustomerRanks(); // Retry with default ranks
+                    });
+                return;
+            }
+            
+            const searchTerm = input.value.toLowerCase().trim();
+            const filtered = CUSTOMER_RANKS.filter(rank => 
+                rank.toLowerCase().includes(searchTerm)
+            );
+            
+            if (filtered.length === 0 && searchTerm !== '') {
+                dropdown.classList.add('hidden');
+                return;
+            }
+            
+            dropdown.innerHTML = filtered.map(rank => 
+                `<div class="country-dropdown-item" onclick="selectCustomerRank('${rank.replace(/'/g, "\\'")}')">${escapeHtml(rank)}</div>`
+            ).join('');
+            dropdown.classList.remove('hidden');
+        }
+
+        function showCustomerRankDropdown() {
+            const input = document.getElementById('customer-rank');
+            const dropdown = document.getElementById('customer-rank-dropdown');
+            if (!input || !dropdown) return;
+            
+            // Ensure customer ranks are loaded
+            if (CUSTOMER_RANKS.length === 0) {
+                fetch('/api/customer-ranks')
+                    .then(response => response.json())
+                    .then(ranks => {
+                        const sortedRanks = [...ranks].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        CUSTOMER_RANKS = sortedRanks.map(r => r.name);
+                        showCustomerRankDropdown(); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading customer ranks:', error);
+                        CUSTOMER_RANKS = ['A', 'B', 'C', 'D']; // Fallback to default ranks
+                        showCustomerRankDropdown(); // Retry with default ranks
+                    });
+                return;
+            }
+            
+            if (input.value.trim() === '') {
+                dropdown.innerHTML = CUSTOMER_RANKS.map(rank => 
+                    `<div class="country-dropdown-item" onclick="selectCustomerRank('${rank.replace(/'/g, "\\'")}')">${escapeHtml(rank)}</div>`
+                ).join('');
+                dropdown.classList.remove('hidden');
+            } else {
+                filterCustomerRanks();
+            }
+        }
+
+        function hideCustomerRankDropdown() {
+            const dropdown = document.getElementById('customer-rank-dropdown');
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        function selectCustomerRank(rank) {
+            console.log('selectCustomerRank called with:', rank);
+            const input = document.getElementById('customer-rank');
+            if (input) {
+                input.value = rank;
+                console.log('Rank input value set to:', input.value);
+            } else {
+                console.error('customer-rank input not found!');
+            }
+            hideCustomerRankDropdown();
         }
 
         // Edit mode dropdown functions for Country
@@ -11114,6 +11883,100 @@
             }, 100);
         }
 
+        // Edit customer rank dropdown functions
+        function filterEditCustomerRank(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            if (!input || !dropdown) return;
+            
+            // Ensure customer ranks are loaded
+            if (CUSTOMER_RANKS.length === 0) {
+                fetch('/api/customer-ranks')
+                    .then(response => response.json())
+                    .then(ranks => {
+                        const sortedRanks = [...ranks].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        CUSTOMER_RANKS = sortedRanks.map(r => r.name);
+                        filterEditCustomerRank(inputId, dropdownId); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading customer ranks:', error);
+                        CUSTOMER_RANKS = ['A', 'B', 'C', 'D']; // Fallback to default ranks
+                        filterEditCustomerRank(inputId, dropdownId); // Retry with default ranks
+                    });
+                return;
+            }
+            
+            const searchTerm = input.value.toLowerCase().trim();
+            const filtered = CUSTOMER_RANKS.filter(rank => 
+                rank.toLowerCase().includes(searchTerm)
+            );
+            
+            if (filtered.length === 0) {
+                // Show all ranks if no match
+                dropdown.innerHTML = CUSTOMER_RANKS.map(rank => 
+                    `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCustomerRank('${inputId}', '${dropdownId}', '${rank.replace(/'/g, "\\'")}')">${escapeHtml(rank)}</div>`
+                ).join('');
+            } else {
+                dropdown.innerHTML = filtered.map(rank => 
+                    `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCustomerRank('${inputId}', '${dropdownId}', '${rank.replace(/'/g, "\\'")}')">${escapeHtml(rank)}</div>`
+                ).join('');
+            }
+            dropdown.classList.remove('hidden');
+        }
+
+        function showEditCustomerRankDropdown(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            if (!input || !dropdown) return;
+            
+            // Ensure customer ranks are loaded
+            if (CUSTOMER_RANKS.length === 0) {
+                fetch('/api/customer-ranks')
+                    .then(response => response.json())
+                    .then(ranks => {
+                        const sortedRanks = [...ranks].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        CUSTOMER_RANKS = sortedRanks.map(r => r.name);
+                        showEditCustomerRankDropdown(inputId, dropdownId); // Retry after loading
+                    })
+                    .catch(error => {
+                        console.error('Error loading customer ranks:', error);
+                        CUSTOMER_RANKS = ['A', 'B', 'C', 'D']; // Fallback to default ranks
+                        showEditCustomerRankDropdown(inputId, dropdownId); // Retry with default ranks
+                    });
+                return;
+            }
+            
+            // Always show full list when focused/clicked, regardless of input value
+            const allRanks = CUSTOMER_RANKS;
+            dropdown.innerHTML = allRanks.map(rank => 
+                `<div class="country-dropdown-item" onmousedown="event.preventDefault(); selectEditCustomerRank('${inputId}', '${dropdownId}', '${rank.replace(/'/g, "\\'")}')">${escapeHtml(rank)}</div>`
+            ).join('');
+            dropdown.classList.remove('hidden');
+        }
+
+        function hideEditCustomerRankDropdown(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        function selectEditCustomerRank(inputId, dropdownId, rank) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.value = rank;
+                // Trigger both input and change events to ensure the value is synced
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                // Also trigger focus to keep the field active
+                input.focus();
+            }
+            // Use a small delay before hiding to ensure the value is set
+            setTimeout(() => {
+                hideEditCustomerRankDropdown(dropdownId);
+            }, 100);
+        }
+
         // Attachment handling functions for Create Customer (mirror task form attachments)
         let customerDropzoneHandlers = { dragover: null, dragleave: null, drop: null, paste: null };
         
@@ -11355,6 +12218,7 @@
             const websiteInput = document.getElementById('customer-website');
             const sourceInput = document.getElementById('customer-source');
             const businessTypeSelect = document.getElementById('customer-business-type');
+            const rankInput = document.getElementById('customer-rank');
             const remarkDiv = document.getElementById('customer-remark');
             
             const companyName = (companyInput && companyInput.value || '').trim();
@@ -11363,7 +12227,11 @@
             const website = (websiteInput.value || '').trim();
             const source = (sourceInput && sourceInput.value || '').trim();
             const businessType = (businessTypeSelect && businessTypeSelect.value || '').trim();
+            const rank = (rankInput && rankInput.value || '').trim();
             const remark = remarkDiv ? remarkDiv.innerHTML.trim() : '';
+            
+            // Debug: Log rank value to console
+            console.log('Saving customer with rank:', rank);
 
             // Clear previous validation highlights
             const customerForm = document.querySelector('#create-customer-content');
@@ -11430,17 +12298,26 @@
             }
 
             showCustomerStatus('Saving customer...', false, 'info');
+            
+            // Re-read rank value directly from input to ensure we have the latest value
+            const rankInputCheck = document.getElementById('customer-rank');
+            const finalRank = rankInputCheck ? (rankInputCheck.value || '').trim() : rank;
+            console.log('Final rank value before save:', finalRank, 'Original rank:', rank);
 
             const bodyBase = {
                 country: country || null,
                 website: website && website.trim() !== '' ? website : null,
                 source: source || null,
                 business_type: businessType || null,
+                rank: finalRank && finalRank.trim() !== '' ? finalRank.trim() : null,
                 remark: remark || null,
                 attachments: customerAttachments.length > 0 ? JSON.stringify(customerAttachments) : null,
                 company_name: companyName || null,
                 address: address || null
             };
+            
+            // Debug: Log the request body
+            console.log('Request body base:', bodyBase);
 
             const requests = contacts.map(contact => {
                 const namePart = (contact.name || '').trim();
@@ -11491,6 +12368,8 @@
                     if (websiteInput) websiteInput.value = '';
                     if (sourceInput) sourceInput.value = '';
                     if (businessTypeInput) businessTypeInput.value = '';
+                    const rankInput = document.getElementById('customer-rank');
+                    if (rankInput) rankInput.value = '';
 
                     // Reset remark
                     if (remarkDiv) remarkDiv.innerHTML = '';
@@ -11504,7 +12383,13 @@
                     if (attachmentFileInput) attachmentFileInput.value = '';
 
                     showCustomerStatus('Customer(s) saved.', false);
-                    loadCustomers(false);
+                    // Reload customer list immediately to show saved rank
+                    loadCustomers(false).then(() => {
+                        // Force a re-render to ensure rank is visible
+                        if (customerCache && customerCache.length > 0) {
+                            renderCustomers(customerCache);
+                        }
+                    });
                 })
                 .catch(error => {
                     showCustomerStatus(`Error: ${error.message}`, true);
@@ -11587,6 +12472,21 @@
                         .catch(error => {
                             console.error('Error loading customer business types:', error);
                             CUSTOMER_BUSINESS_TYPES = []; // Ensure it's an array even on error
+                        })
+                );
+            }
+
+            if (CUSTOMER_RANKS.length === 0) {
+                loadPromises.push(
+                    fetch('/api/customer-ranks')
+                        .then(response => response.json())
+                        .then(ranks => {
+                            const sortedRanks = [...ranks].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                            CUSTOMER_RANKS = sortedRanks.map(r => r.name);
+                        })
+                        .catch(error => {
+                            console.error('Error loading customer ranks:', error);
+                            CUSTOMER_RANKS = ['A', 'B', 'C', 'D']; // Fallback to default ranks
                         })
                 );
             }
@@ -11673,6 +12573,23 @@
                             <div id="${dropdownId}" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; right: 0; min-width: 200px; z-index: 10000; max-height: 200px; overflow-y: auto; background-color: #ffffff; border: 1px solid #000000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" onmousedown="event.preventDefault();"></div>
                         </div>
                     `;
+                } else if (field === 'rank') {
+                    // Create rank dropdown input
+                    const uniqueId = `edit-rank-${customerId}`;
+                    const dropdownId = `edit-rank-dropdown-${customerId}`;
+                    cell.innerHTML = `
+                        <div style="position: relative;">
+                            <input type="text" id="${uniqueId}" value="${escapeHtml(value)}" 
+                                   placeholder="Search or select rank" 
+                                   autocomplete="off" 
+                                   style="width: 100%; padding: 5px; border: 1px solid #000000; font-size: 12px;" 
+                                   data-field="${field}"
+                                   oninput="filterEditCustomerRank('${uniqueId}', '${dropdownId}')" 
+                                   onfocus="showEditCustomerRankDropdown('${uniqueId}', '${dropdownId}')" 
+                                   onblur="setTimeout(() => hideEditCustomerRankDropdown('${dropdownId}'), 200)">
+                            <div id="${dropdownId}" class="country-dropdown hidden" style="position: absolute; top: 100%; left: 0; right: 0; min-width: 200px; z-index: 10000; max-height: 200px; overflow-y: auto; background-color: #ffffff; border: 1px solid #000000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" onmousedown="event.preventDefault();"></div>
+                        </div>
+                    `;
                 } else {
                     cell.innerHTML = `<input type="text" value="${escapeHtml(value)}" style="width: 100%; padding: 5px; border: 1px solid #000000; font-size: 12px;" data-field="${field}">`;
                 }
@@ -11734,11 +12651,45 @@
             const cells = row.querySelectorAll('.editable-cell');
             cells.forEach(cell => {
                 const field = cell.dataset.field;
-                const input = cell.querySelector('input, textarea');
+                if (!field) return;
+                
+                // For dropdown fields (rank, source, business_type), the input is nested in a div
+                // Try multiple selectors to find the input
+                let input = cell.querySelector('input[type="text"]');
+                if (!input) {
+                    input = cell.querySelector('input');
+                }
+                if (!input) {
+                    input = cell.querySelector('textarea');
+                }
+                
                 if (input) {
-                    editedData[field] = input.value.trim();
+                    const value = input.value.trim();
+                    editedData[field] = value;
+                } else {
+                    // If no input found, the field might not be in edit mode
+                    console.warn(`No input found for field: ${field}`);
                 }
             });
+            
+            // Ensure rank is included - check both the cell input and by ID
+            if (!editedData.hasOwnProperty('rank') || editedData.rank === undefined || editedData.rank === '') {
+                // Try to get rank from the input by ID pattern (for dropdown fields)
+                const rankInput = document.querySelector(`input[id^="edit-rank-${customerId}"]`);
+                if (rankInput) {
+                    editedData.rank = rankInput.value.trim();
+                } else {
+                    // Fallback: get from the cell directly
+                    const rankCell = row.querySelector('.editable-cell[data-field="rank"]');
+                    if (rankCell) {
+                        const rankInputInCell = rankCell.querySelector('input');
+                        if (rankInputInCell) {
+                            editedData.rank = rankInputInCell.value.trim();
+                        }
+                    }
+                }
+            }
+            
             
             // Validate required fields
             if (!editedData.name) {
@@ -11763,6 +12714,12 @@
             
             showCustomerStatus('Saving customer...', false, 'info');
             
+            // Re-read rank value directly from input to ensure we have the latest value
+            const rankInputCheck = document.querySelector(`input[id^="edit-rank-${customerId}"]`);
+            if (rankInputCheck && (!editedData.rank || editedData.rank.trim() === '')) {
+                editedData.rank = rankInputCheck.value.trim();
+            }
+            
             fetch(`/api/customers/${customerId}`, {
                 method: 'PUT',
                 headers: {
@@ -11777,6 +12734,7 @@
                     website: editedData.website || null,
                     source: editedData.source || null,
                     business_type: editedData.business_type || null,
+                    rank: editedData.rank && editedData.rank.trim() !== '' ? editedData.rank.trim() : null,
                     remark: editedData.remark || null,
                     attachments: attachments
                 })
@@ -11789,8 +12747,13 @@
                     showCustomerStatus('Customer updated.', false);
                     editingCustomerId = null;
                     delete originalCustomerData[customerId];
-                    // Reload customer list
-                    loadCustomers(false);
+                    // Reload customer list immediately to show updated rank
+                    loadCustomers(false).then(() => {
+                        // Force a re-render to ensure rank is visible
+                        if (customerCache && customerCache.length > 0) {
+                            renderCustomers(customerCache);
+                        }
+                    });
                 }
             })
             .catch(error => {
@@ -11845,6 +12808,7 @@
                 const country = customer.country || '';
                 const website = customer.website || '';
                 const remark = customer.remark || '';
+                const rank = customer.rank || '';
                 const websiteLink = website ? (website.startsWith('http') ? website : `https://${website}`) : '';
                 
                 // Parse attachments
@@ -11900,6 +12864,7 @@
                     data-website="${escapeHtml(website)}"
                     data-source="${escapeHtml(customer.source || '')}"
                     data-business_type="${escapeHtml(customer.business_type || '')}"
+                    data-rank="${escapeHtml(rank)}"
                     data-remark="${escapeHtml(plainRemark)}"
                     data-attachments="${escapeHtml(attachmentsText)}"
                     data-created_at="${escapeHtml(customer.created_at || '')}"
@@ -11912,6 +12877,7 @@
                     <td class="editable-cell" data-field="website">${websiteLink ? `<a href="${escapeHtml(websiteLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(website)}</a>` : ''}</td>
                     <td class="editable-cell" data-field="source">${escapeHtml(customer.source || '')}</td>
                     <td class="editable-cell" data-field="business_type">${escapeHtml(customer.business_type || '')}</td>
+                    <td class="editable-cell" data-field="rank">${escapeHtml(rank)}</td>
                     <td class="editable-cell" data-field="remark" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${remark}</td>
                     <td style="max-width: 150px; font-size: 11px;">${attachmentsHtml || '-'}</td>
                     <td>${escapeHtml(customer.created_at ? new Date(customer.created_at).toLocaleString() : '')}</td>

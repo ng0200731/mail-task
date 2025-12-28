@@ -4,7 +4,9 @@
       "Bash(nslookup:*)",
       "Bash(python app.py:*)",
       "Bash(netstat:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(sqlite3:*)",
+      "Bash(python:*)"
     ]
   }
 }

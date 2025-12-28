@@ -45,6 +45,7 @@ def initialize_database():
                 source TEXT,
                 address TEXT,
                 business_type TEXT,
+                rank TEXT,
                 created_at TEXT DEFAULT (datetime('now')),
                 created_by TEXT
             )
@@ -88,6 +89,10 @@ def initialize_database():
             pass  # Column already exists
         try:
             cursor.execute("ALTER TABLE customers ADD COLUMN created_by TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        try:
+            cursor.execute("ALTER TABLE customers ADD COLUMN rank TEXT")
         except sqlite3.OperationalError:
             pass  # Column already exists
         # Update existing records to set created_by
@@ -268,6 +273,30 @@ def initialize_database():
             cursor.executemany("""
             INSERT INTO customer_business_types (name, display_order) VALUES (?, ?)
             """, default_business_types)
+        
+        # Customer ranks table for dropdown options
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS customer_ranks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            display_order INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+        """)
+        connection.commit()  # Commit table creation
+        # Initialize default customer ranks if table is empty
+        cursor.execute("SELECT COUNT(*) as count FROM customer_ranks")
+        if cursor.fetchone()['count'] == 0:
+            default_ranks = [
+                ('A', 1),
+                ('B', 2),
+                ('C', 3),
+                ('D', 4)
+            ]
+            cursor.executemany("""
+            INSERT INTO customer_ranks (name, display_order) VALUES (?, ?)
+            """, default_ranks)
+            connection.commit()  # Commit default ranks insertion
         
         # Task statuses table for dropdown options
         cursor.execute("""
@@ -506,7 +535,14 @@ def initialize_database():
             cursor.executemany("""
                 INSERT INTO countries (name, display_order) VALUES (?, ?)
             """, default_countries)
-            connection.commit()
+        
+        # Final commit to ensure all changes are saved
+        connection.commit()
+    except Exception as e:
+        # Rollback on error
+        if connection:
+            connection.rollback()
+        raise e
     finally:
         if cursor:
             cursor.close()

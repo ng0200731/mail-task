@@ -7,10 +7,10 @@ from flask import session
 from utils.db_utils import get_db_connection
 
 
-def insert_customer(name: str, email_suffix: str, country: str = None, website: str = None, remark: str = None, attachments: str = None, company_name: str = None, tel: str = None, source: str = None, address: str = None, business_type: str = None, created_by: str = None) -> int:
+def insert_customer(name: str, email_suffix: str, country: str = None, website: str = None, remark: str = None, attachments: str = None, company_name: str = None, tel: str = None, source: str = None, address: str = None, business_type: str = None, rank: str = None, created_by: str = None) -> int:
     """
     Insert a new customer into the database.
-    
+
     Args:
         name (str): Customer name
         email_suffix (str): Email suffix (domain part)
@@ -23,9 +23,10 @@ def insert_customer(name: str, email_suffix: str, country: str = None, website: 
         source (str, optional): Customer source
         address (str, optional): Address
         business_type (str, optional): Business type
+        rank (str, optional): Customer rank (A, B, C, etc.)
         created_by (str, optional): User email who created this customer.
                                     If None, will use session.get('user_email') or default.
-    
+
     Returns:
         int: Customer ID
     """
@@ -35,8 +36,8 @@ def insert_customer(name: str, email_suffix: str, country: str = None, website: 
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute(
-        "INSERT INTO customers (name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, created_by)
+        "INSERT INTO customers (name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, rank, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, rank, created_by)
     )
     connection.commit()
     customer_id = cursor.lastrowid
@@ -68,7 +69,7 @@ def fetch_customers(created_by: str = None):
     connection = get_db_connection()
     cursor = connection.cursor()
     cursor.execute("""
-        SELECT id, name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, created_at, created_by
+        SELECT id, name, email_suffix, country, website, remark, attachments, company_name, tel, source, address, business_type, rank, created_at, created_by
         FROM customers
         WHERE created_by = ?
         ORDER BY datetime(created_at) DESC
@@ -132,6 +133,10 @@ def fetch_customers(created_by: str = None):
             created_by_val = row['created_by'] if row['created_by'] else None
         except (KeyError, IndexError):
             created_by_val = None
+        try:
+            rank = row['rank'] if row['rank'] else None
+        except (KeyError, IndexError):
+            rank = None
 
         customers.append({
             'id': row['id'],
@@ -146,6 +151,7 @@ def fetch_customers(created_by: str = None):
             'tel': tel,
             'address': address,
             'business_type': business_type,
+            'rank': rank,
             'created_at': created_at,
             'created_by': created_by_val
         })

@@ -7196,6 +7196,10 @@
                                     Company name
                                     <span class="email-col-resizer" data-column="company"></span>
                                 </th>
+                                <th style="width: 50px; min-width: 50px;" data-column="rank">
+                                    Rank
+                                    <span class="email-col-resizer" data-column="rank"></span>
+                                </th>
                                 <th style="width: ${layout.name}%; min-width: 120px;" data-column="name">
                                     Name
                                     <span class="email-col-resizer" data-column="name"></span>
@@ -7255,15 +7259,18 @@
                                 // Find customer by email to get company name
                                 const customer = findCustomerByEmail(email.from || '');
                                 const companyName = customer && customer.company_name ? customer.company_name : 'new customer';
+                                const customerRank = customer && customer.rank ? customer.rank : '';
                                 const safeCompanyName = escapeHtml(companyName);
-                                const companyDisplay = companyName === 'new customer' 
-                                    ? `<span style="color: red;">${safeCompanyName}</span>` 
+                                const safeRank = escapeHtml(customerRank);
+                                const companyDisplay = companyName === 'new customer'
+                                    ? `<span style="color: red;">${safeCompanyName}</span>`
                                     : safeCompanyName;
-                                
+
                                 return `
                                     <tr class="email-row" data-index="${index}">
                                         <td>${escapeHtml(formatEmailDate(email.date || ''))}</td>
                                         <td>${companyDisplay}</td>
+                                        <td style="text-align: center; font-weight: bold; color: #007bff;">${safeRank}</td>
                                         <td>${escapeHtml(displayName || '')}</td>
                                         <td>${safeSubject || '<span style="color: #999; font-style: italic;">No subject</span>'}</td>
                                         <td>

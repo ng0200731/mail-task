@@ -4296,10 +4296,10 @@
             if (event && event.currentTarget) {
                 event.currentTarget.classList.add('active');
             }
-            // Auto-fetch send box emails when page is shown
+            // Load stored emails from database when Send Box is shown
             const sendboxEmailList = document.getElementById('sendbox-email-list');
             if (sendboxEmailList && (!sendboxEmailList.dataset.loaded || sendboxEmailList.dataset.loaded === 'false')) {
-                fetchSendBoxEmails();
+                loadStoredSendBoxEmails();
             }
         }
         
@@ -6472,6 +6472,32 @@
                 });
         }
 
+        // Load stored emails from database (no server fetch)
+        function loadStoredSendBoxEmails() {
+            const emailList = document.getElementById('sendbox-email-list');
+            if (!emailList) return;
+            
+            emailList.innerHTML = '<div class="loading">Loading stored Send Box emails...</div>';
+            
+            fetchStoredEmails('sendbox')
+                .then(allStoredEmails => {
+                    const uniqueList = deduplicateEmails(allStoredEmails);
+                    cacheEmails('sendbox', uniqueList);
+                    displayEmails(uniqueList, { provider: 'sendbox', cached: false });
+                    currentProvider = 'sendbox';
+                    emailList.dataset.loaded = 'true';
+                    
+                    if (uniqueList.length === 0) {
+                        emailList.innerHTML = '<div class="message info">No stored emails found. Click "Fetch Send Box" to fetch today\'s sent emails from the server.</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to load stored sendbox emails:', error);
+                    emailList.innerHTML = `<div class="message error">Error loading stored emails: ${escapeHtml(error.message)}</div>`;
+                });
+        }
+
+        // Fetch today's emails from server and save to database
         function fetchSendBoxEmails() {
             const profile = getCurrentProfile();
             const lcf = profile.lcf || {};
@@ -6480,12 +6506,7 @@
             showEmailLoadingOverlay();
 
             const emailList = document.getElementById('sendbox-email-list');
-            emailList.innerHTML = '<div class="loading">Loading Send Box emails...</div>';
-            const cached = loadCachedEmails('sendbox');
-            if (cached && Array.isArray(cached)) {
-                const uniqueCached = deduplicateEmails(cached);
-                displayEmails(uniqueCached, { provider: 'sendbox', cached: true });
-            }
+            emailList.innerHTML = '<div class="loading">Fetching today\'s Send Box emails from server...</div>';
 
             // Build request data. If username/password are not provided in Settings,
             // backend will fall back to server-side LCF configuration (.env).
@@ -6533,8 +6554,8 @@
                         emailList.innerHTML = `<div class="message error">Error: ${errorMsg}</div>`;
                         hideEmailLoadingOverlay();
                     } else {
-                        // After fetching new emails and saving to database, reload ALL emails
-                        // from the database (including old ones) to show the complete list
+                        // After fetching today's emails and saving to database, reload ALL stored emails
+                        // from the database to show the complete list (including previously fetched emails)
                         return fetchStoredEmails('sendbox')
                             .then(allStoredEmails => {
                                 const uniqueList = deduplicateEmails(allStoredEmails);
@@ -6544,12 +6565,14 @@
                                 emailList.dataset.loaded = 'true';
                                 hideEmailLoadingOverlay();
                                 
-                                // Show info message if no emails found
-                                if (uniqueList.length === 0) {
-                                    const todayCount = (data.emails || []).length;
-                                    if (todayCount === 0) {
-                                        emailList.innerHTML = '<div class="message info" style="margin-bottom: 10px;">No emails found for today. Send Box only shows emails sent today from weiwu@fuchanghk.com.</div>';
-                                    }
+                                // Show info message about what was fetched
+                                const todayCount = (data.emails || []).length;
+                                if (todayCount > 0) {
+                                    console.log(`Fetched ${todayCount} email(s) from today and saved to database. Total stored: ${uniqueList.length}`);
+                                } else if (uniqueList.length === 0) {
+                                    emailList.innerHTML = '<div class="message info">No emails found for today. Send Box only fetches emails sent today from weiwu@fuchanghk.com.</div>';
+                                } else {
+                                    console.log(`No new emails for today. Showing ${uniqueList.length} previously stored email(s).`);
                                 }
                             })
                             .catch(error => {
@@ -6564,7 +6587,7 @@
                                 
                                 // Show info message if no emails found
                                 if (uniqueList.length === 0) {
-                                    emailList.innerHTML = '<div class="message info">No emails found for today. Send Box only shows emails sent today from weiwu@fuchanghk.com.</div>';
+                                    emailList.innerHTML = '<div class="message info">No emails found for today. Send Box only fetches emails sent today from weiwu@fuchanghk.com.</div>';
                                 }
                             });
                     }

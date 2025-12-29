@@ -39,7 +39,8 @@ from config import (
     SMTP_LCF_CONFIG,
     DEFAULT_SMTP_CONFIGS,
     GMAIL_OAUTH_CONFIG,
-    VERIFICATION_CODE_EXPIRY
+    VERIFICATION_CODE_EXPIRY,
+    FLASK_PORT
 )
 
 # Import database utilities
@@ -599,7 +600,7 @@ def gmail_auth():
     data = request.args
     client_id = (data.get('client_id') or GMAIL_OAUTH_CONFIG.get('client_id') or '').strip()
     client_secret = (data.get('client_secret') or GMAIL_OAUTH_CONFIG.get('client_secret') or '').strip()
-    redirect_uri = (data.get('redirect_uri') or GMAIL_OAUTH_CONFIG.get('redirect_uri') or 'http://localhost:5000/oauth2callback').strip()
+    redirect_uri = (data.get('redirect_uri') or GMAIL_OAUTH_CONFIG.get('redirect_uri') or f'http://localhost:{FLASK_PORT}/oauth2callback').strip()
     
     if not client_id or not client_secret:
         return jsonify({'error': 'Gmail OAuth client_id and client_secret are required. Please enter them in the Settings page.'}), 400
@@ -717,7 +718,7 @@ def oauth2callback():
         return '<html><body><h1>Authentication Failed</h1><p>OAuth credentials not found. Please try authenticating again.</p><script>setTimeout(() => window.close(), 3000);</script></body></html>', 400
     
     if not redirect_uri:
-        redirect_uri = GMAIL_OAUTH_CONFIG.get('redirect_uri', 'http://localhost:5000/oauth2callback')
+        redirect_uri = GMAIL_OAUTH_CONFIG.get('redirect_uri', f'http://localhost:{FLASK_PORT}/oauth2callback')
     
     try:
         
@@ -2482,5 +2483,40 @@ initialize_database()
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Use 0.0.0.0 to allow access from network (192.168.x.x)
+    # FLASK_PORT is already imported at the top
+    import socket
+    
+    port = FLASK_PORT
+    
+    # Get local IP address for network access
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        local_ip = "localhost"
+    
+    # Try ports starting from configured port, increment until one works
+    start_port = port
+    max_attempts = 10
+    
+    for attempt in range(max_attempts):
+        try_port = start_port + attempt
+        try:
+            if attempt > 0:
+                print(f"Port {start_port + attempt - 1} unavailable, trying port {try_port}...")
+            else:
+                print(f"Starting Flask server on port {try_port}...")
+            print(f"  Local access: http://127.0.0.1:{try_port}")
+            print(f"  Network access: http://{local_ip}:{try_port}")
+            app.run(debug=True, host='0.0.0.0', port=try_port)
+            break  # Success, exit loop
+        except OSError as e:
+            if attempt < max_attempts - 1:
+                continue  # Try next port
+            else:
+                print(f"❌ Failed to start server after trying ports {start_port} to {try_port}")
+                raise
 

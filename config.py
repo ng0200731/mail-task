@@ -113,10 +113,14 @@ DEFAULT_SMTP_CONFIGS = [SMTP_LCF_CONFIG, SMTP_PRIMARY_CONFIG, SMTP_BACKUP_CONFIG
 # Gmail OAuth 2.0 Configuration
 # ============================================================================
 
+# Default Flask port (can be overridden via FLASK_PORT environment variable)
+# Using 8000 as default for test server
+FLASK_PORT = int(os.environ.get('FLASK_PORT', 8000))
+
 GMAIL_OAUTH_CONFIG = {
     'client_id': os.environ.get('GMAIL_CLIENT_ID', ''),
     'client_secret': os.environ.get('GMAIL_CLIENT_SECRET', ''),
-    'redirect_uri': os.environ.get('GMAIL_REDIRECT_URI', 'http://localhost:5000/oauth2callback'),
+    'redirect_uri': os.environ.get('GMAIL_REDIRECT_URI', f'http://localhost:{FLASK_PORT}/oauth2callback'),
     'scopes': ['https://www.googleapis.com/auth/gmail.readonly']
 }
 

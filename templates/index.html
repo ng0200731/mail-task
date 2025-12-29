@@ -1354,36 +1354,46 @@
             z-index: 3;
         }
 
-        /* Sticky headers for customer and task list tables */
+        /* Sticky headers for all tables (email, customer, task) */
         .customer-table thead th {
             position: sticky;
-            z-index: 2;
+            z-index: 10;
+            background-color: #f0f0f0;
         }
 
-        .customer-table thead tr:nth-child(1) th {
+        .customer-table thead tr:first-child th {
             top: 0;
+            background-color: #f0f0f0;
         }
 
-        .customer-table thead tr:nth-child(2) th {
-            top: 40px; /* approximate height of first header row */
-            background-color: #ffffff !important;
-            color: #000000 !important;
-            padding: 6px 8px;
-            min-height: 38px;
+        /* Email table: filter row in tbody - make td elements sticky */
+        .email-filter-section {
+            position: relative;
         }
 
-        /* Force the email filter row to stay visible even if other styles interfere */
         .email-filter-row {
             display: table-row !important;
-            position: sticky;
-            top: 40px;
-            background-color: #fafafa !important;
-            z-index: 5;
         }
 
-        .email-filter-row th {
-            background-color: #fafafa !important;
-            height: 38px;
+        .email-filter-row td {
+            position: sticky;
+            top: 40px; /* height of header row */
+            background-color: #ffffff !important;
+            z-index: 9;
+            padding: 5px !important;
+        }
+
+        /* Customer table: filter row in tbody - make td elements sticky */
+        .customer-filter-section {
+            position: relative;
+        }
+
+        .customer-filter-section tr:first-child td {
+            position: sticky;
+            top: 40px; /* height of header row */
+            background-color: #ffffff !important;
+            z-index: 9;
+            padding: 5px !important;
         }
         
         .customer-table thead tr:nth-child(2) th input,
@@ -1438,22 +1448,27 @@
         /* Sticky header + filter row for task list */
         .task-table thead th {
             position: sticky;
-            z-index: 2;
+            z-index: 10;
+            background-color: #f0f0f0;
         }
 
-        .task-table thead tr:nth-child(1) th {
+        .task-table thead tr:first-child th {
             top: 0;
             background-color: #f0f0f0;
         }
 
+        .task-table thead tr.task-filter-row th,
         .task-table thead tr:nth-child(2) th {
+            position: sticky;
             top: 40px; /* height of first header row */
             background-color: #ffffff !important;
             color: #000000 !important;
             padding: 6px 8px;
             min-height: 38px;
+            z-index: 9;
         }
 
+        .task-table thead tr.task-filter-row th input,
         .task-table thead tr:nth-child(2) th input,
         .task-table thead tr:nth-child(2) th input[type="text"],
         .task-table thead tr:nth-child(2) th .customer-filter-input {

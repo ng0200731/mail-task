@@ -107,6 +107,7 @@
             background-color: #ffffff;
             padding: 20px;
             overflow-y: auto;
+            overflow-x: hidden;
             position: relative;
         }
 
@@ -188,6 +189,9 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100%;
         }
 
         .email-item {
@@ -1174,6 +1178,7 @@
             border-spacing: 0;
             margin-top: 10px;
             position: relative;
+            table-layout: fixed;
         }
         
         .customer-table thead {
@@ -1194,8 +1199,10 @@
             font-family: Arial, sans-serif;
             font-size: 14px;
             position: relative;
-            overflow: visible;
+            overflow: hidden;
             vertical-align: top;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         
         .customer-table th[data-column="content"],
@@ -3363,12 +3370,14 @@
         }
 
         function setupEmailColumnResizers() {
-            const emailList = document.getElementById('email-list');
+            // Support both email-list and sendbox-email-list
+            const emailList = document.getElementById('email-list') || document.getElementById('sendbox-email-list');
             if (!emailList) return;
             const table = emailList.querySelector('.customer-table');
             if (!table) return;
             const headers = Array.from(table.querySelectorAll('thead tr:nth-child(1) th'));
-            if (headers.length !== 4) return;
+            // Email table has 7 columns: Date, Company name, Rank, Name, Title, Content, Attachments
+            if (headers.length !== 7) return;
 
             headers.forEach((th, index) => {
                 const resizer = th.querySelector('.email-col-resizer');
@@ -7449,7 +7458,7 @@
                                     Title
                                     <span class="email-col-resizer" data-column="title"></span>
                                 </th>
-                                <th style="width: ${layout.company}%; min-width: 120px;" data-column="content">
+                                <th style="width: ${layout.content}%; min-width: 120px;" data-column="content">
                                     Content
                                     <span class="email-col-resizer" data-column="content"></span>
                                 </th>

@@ -241,7 +241,7 @@ def fetch_gmail_api(limit=50, days_back=1):
         return {'error': f'Error fetching Gmail: {error_str}'}
 
 
-def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=False, limit=50, days_back=0):
+def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=False, limit=50, days_back=0, folder='INBOX'):
     """
     Fetch emails from IMAP server.
     
@@ -254,6 +254,7 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
         use_tls (bool): Use TLS connection (default: False)
         limit (int): Maximum number of emails to fetch (default: 50)
         days_back (int): Number of days to look back (default: 0)
+        folder (str): IMAP folder to fetch from (default: 'INBOX', can be 'Sent Items', 'Sent', etc.)
     
     Returns:
         dict: Dictionary with 'emails' list and 'count', or 'error' if failed
@@ -295,7 +296,7 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                 mail.starttls()
         
         mail.login(username, password)
-        mail.select('INBOX')
+        mail.select(folder)
         
         # Search for recent emails - fetch all emails in date range (with and without attachments)
         oldest_date = min(allowed_dates)

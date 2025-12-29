@@ -922,6 +922,48 @@ def fetch_lcf():
     return jsonify(result)
 
 
+@app.route('/api/fetch-sendbox', methods=['POST'])
+def fetch_sendbox():
+    """Fetch sent emails from LCF account Send Items folder - visible to all users"""
+    data = request.json or {}
+    # For Send Box, requirement is: each fetch must load ALL sent emails for *today*.
+    # We therefore ignore any client-provided limit and use limit = 0, which
+    # in the IMAP helper means "no trimming" of the IDs returned by the server.
+    limit = 0
+
+    config = {
+        'imap_server': data.get('imap_server', LCF_CONFIG['imap_server']),
+        'port': data.get('port', LCF_CONFIG['port']),
+        'username': data.get('username', LCF_CONFIG['username']),
+        'password': data.get('password', LCF_CONFIG['password']),
+        'use_ssl': data.get('use_ssl', LCF_CONFIG.get('use_ssl', True)),
+        'use_tls': data.get('use_tls', LCF_CONFIG.get('use_tls', False))
+    }
+
+    # Always fetch only today's sent emails for Send Box (days_back = 0), and with
+    # limit = 0 (all messages returned by the IMAP SINCE search). The IMAP
+    # helper will further filter by today's date, so even if the server
+    # returns older messages for the SINCE search, only today's messages
+    # are kept.
+    result = fetch_emails(
+        config['imap_server'],
+        config['port'],
+        config['username'],
+        config['password'],
+        config['use_ssl'],
+        config['use_tls'],
+        limit,
+        days_back=0,
+        folder='Sent Items'
+    )
+
+    try:
+        save_emails('sendbox', result.get('emails', []))
+    except Exception as exc:
+        print(f"Error saving Send Box emails: {exc}")
+    return jsonify(result)
+
+
 @app.route('/api/fetch-163', methods=['POST'])
 def fetch_163():
     """Fetch emails from 163.com - requires level 2+"""

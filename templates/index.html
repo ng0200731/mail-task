@@ -7382,19 +7382,40 @@
             }
 
             if (currentEmailViewMode === 'table') {
-                // Click on row or "Read more" opens full email modal
-                document.querySelectorAll('.email-row').forEach(row => {
-                    row.addEventListener('click', (evt) => {
-                        // Avoid double-handling if clicking Read more (handled separately)
-                        if (evt.target && evt.target.classList.contains('email-read-more')) {
-                            return;
+                // For LCF provider: only Content column click opens task modal
+                // For other providers: entire row click opens task modal
+                if (provider === 'lcf') {
+                    // LCF: Only Content column (6th column) is clickable
+                    document.querySelectorAll('.email-row').forEach(row => {
+                        // Get the Content column (6th td, index 5)
+                        const contentCell = row.querySelector('td:nth-child(6)');
+                        if (contentCell) {
+                            contentCell.style.cursor = 'pointer';
+                            contentCell.addEventListener('click', (evt) => {
+                                // Avoid double-handling if clicking Read more (handled separately)
+                                if (evt.target && evt.target.classList.contains('email-read-more')) {
+                                    return;
+                                }
+                                const index = parseInt(row.getAttribute('data-index'), 10);
+                                openTaskModal(index);
+                            });
                         }
-                        const index = parseInt(row.getAttribute('data-index'), 10);
-                        // In table view, row click should open the same Task modal
-                        // as the "Task" button (detailed task-style view).
-                        openTaskModal(index);
                     });
-                });
+                } else {
+                    // Other providers: entire row is clickable
+                    document.querySelectorAll('.email-row').forEach(row => {
+                        row.addEventListener('click', (evt) => {
+                            // Avoid double-handling if clicking Read more (handled separately)
+                            if (evt.target && evt.target.classList.contains('email-read-more')) {
+                                return;
+                            }
+                            const index = parseInt(row.getAttribute('data-index'), 10);
+                            // In table view, row click should open the same Task modal
+                            // as the "Task" button (detailed task-style view).
+                            openTaskModal(index);
+                        });
+                    });
+                }
                 document.querySelectorAll('.email-read-more').forEach(link => {
                     link.addEventListener('click', (evt) => {
                         evt.preventDefault();

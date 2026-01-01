@@ -10,6 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
+from config import VERIFY_SSL_CERTIFICATES
 
 
 def build_smtp_config_list(configs):
@@ -72,18 +73,22 @@ def send_email_with_configs(configs, subject, body, recipients, is_html=False, s
         smtp = None
         try:
             if cfg.get('use_ssl'):
-                # Create SSL context that doesn't verify certificates (some enterprise servers need this)
+                # Create SSL context with configurable certificate verification
                 context = ssl.create_default_context()
-                context.check_hostname = False
-                context.verify_mode = ssl.CERT_NONE
+                if not VERIFY_SSL_CERTIFICATES:
+                    # Only disable verification if explicitly configured (for enterprise servers)
+                    context.check_hostname = False
+                    context.verify_mode = ssl.CERT_NONE
                 smtp = smtplib.SMTP_SSL(cfg['server'], cfg['port'], timeout=cfg.get('timeout', 10), context=context)
             else:
                 smtp = smtplib.SMTP(cfg['server'], cfg['port'], timeout=cfg.get('timeout', 10))
                 if cfg.get('use_tls'):
-                    # Create SSL context for STARTTLS
+                    # Create SSL context for STARTTLS with configurable certificate verification
                     context = ssl.create_default_context()
-                    context.check_hostname = False
-                    context.verify_mode = ssl.CERT_NONE
+                    if not VERIFY_SSL_CERTIFICATES:
+                        # Only disable verification if explicitly configured (for enterprise servers)
+                        context.check_hostname = False
+                        context.verify_mode = ssl.CERT_NONE
                     smtp.starttls(context=context)
 
             smtp.login(cfg['username'], cfg['password'])

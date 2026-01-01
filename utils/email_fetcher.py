@@ -14,6 +14,7 @@ from googleapiclient.errors import HttpError
 from utils.oauth_utils import load_oauth_token
 from utils.email_parser import decode_mime_words, strip_html_tags, build_sequence_code
 from utils.db_utils import get_db_connection
+from config import VERIFY_SSL_CERTIFICATES
 
 
 def fetch_gmail_api(limit=50, days_back=1):
@@ -284,8 +285,12 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
         return raw.strip().strip('<>').strip()
     
     try:
-        # Create SSL context
+        # Create SSL context with configurable certificate verification
         context = ssl.create_default_context()
+        if not VERIFY_SSL_CERTIFICATES:
+            # Only disable verification if explicitly configured (for enterprise servers)
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
         
         # Connect to IMAP server based on SSL/TLS settings
         if use_ssl:
@@ -293,7 +298,7 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
         else:
             mail = imaplib.IMAP4(imap_server, port)
             if use_tls:
-                mail.starttls()
+                mail.starttls(context)
         
         mail.login(username, password)
         mail.select(folder)

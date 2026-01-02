@@ -1478,7 +1478,7 @@
         .task-table {
             width: max-content !important;
             min-width: 100%;
-            table-layout: auto;
+            table-layout: fixed; /* Changed to fixed for column resizing */
             /* Ensure table is wider than container to trigger scrollbar */
             border-collapse: separate;
             border-spacing: 0;
@@ -1491,19 +1491,93 @@
             max-height: 100%;
         }
 
+        /* Column resizing for Task List */
+        .task-table th {
+            position: relative;
+            user-select: none;
+        }
+
+        .task-table th .resize-handle {
+            position: absolute;
+            top: 0;
+            right: -3px;
+            width: 10px;
+            height: 100%;
+            cursor: col-resize;
+            background: transparent;
+            z-index: 100;
+            border-right: 3px solid transparent;
+        }
+
+        .task-table th .resize-handle:hover {
+            background: rgba(0, 123, 255, 0.3);
+            border-right: 3px solid #007bff;
+        }
+
+        .task-table th .resize-handle::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 2px;
+            height: 20px;
+            background: transparent;
+            pointer-events: none;
+        }
+
+        .task-table th .resize-handle:hover::after {
+            content: '||';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            color: #007bff;
+            font-weight: bold;
+            font-size: 16px;
+            pointer-events: none;
+            background: white;
+            padding: 3px 6px;
+            border: 2px solid #007bff;
+            border-radius: 3px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 101;
+            width: auto;
+            height: auto;
+        }
+
+        .task-table th.resizing {
+            user-select: none;
+        }
+
+        .task-table th.resizing .resize-handle {
+            background: rgba(0, 123, 255, 0.3) !important;
+            border-right: 2px solid #007bff !important;
+        }
+
         .task-table th,
         .task-table td {
             white-space: nowrap;
-            min-width: 140px;
+            min-width: 100px; /* Reduced for resizing flexibility */
             padding: 8px 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        /* Make Context ~3x wider - this will make table wider than viewport */
-        .task-table th.task-context-col,
+        /* Make Context column width = 2X Customer column width (180px * 2 = 360px) */
+        .task-table th.task-context-col {
+            width: 360px !important;
+            min-width: 360px !important;
+            max-width: 360px !important;
+        }
+        
         .task-table td.task-context-col {
-            min-width: 600px !important; /* Increased to ensure scrollbar appears */
+            width: 360px !important;
+            min-width: 360px !important;
+            max-width: 360px !important;
             white-space: normal;
             word-wrap: break-word;
+            overflow: hidden;
         }
 
         /* Force scrollbars to be visible on Windows Chrome/Edge */
@@ -9726,10 +9800,10 @@
                                     <thead>
                                         <tr>
                                             <th>Sequence</th>
-                                            <th style="min-width: 180px;">Customer</th>
+                                            <th style="min-width: 180px; width: 180px;">Customer</th>
                                             <th>Email</th>
                                             <th>Type</th>
-                                            <th class="task-context-col">Context</th>
+                                            <th class="task-context-col" style="width: 360px !important; min-width: 360px !important; max-width: 360px !important;">Context</th>
                                             <th>Status</th>
                                             <th>Deadline</th>
                                             <th>Created At</th>
@@ -9768,6 +9842,9 @@
                             filterInputs.forEach(input => {
                                 input.addEventListener('input', applyTaskTableFilters);
                             });
+
+                            // Setup column resizing
+                            setupTaskTableColumnResizing();
                         }
                     }
                 })
@@ -13594,6 +13671,159 @@
             .catch(error => {
                 alert('Error deleting task status: ' + error.message);
             });
+        }
+
+        // Task List column resizing functionality
+        function setupTaskTableColumnResizing() {
+            const table = document.getElementById('task-list-table');
+            if (!table) return;
+
+            // Restore saved column widths
+            restoreTaskTableColumnWidths(table);
+
+            const headers = table.querySelectorAll('thead tr:first-child th');
+            headers.forEach((header, index) => {
+                // Skip sequence column (hidden) and action column (sticky)
+                if (index === 0 || index === headers.length - 1) return;
+
+                // Create resize handle
+                const resizeHandle = document.createElement('div');
+                resizeHandle.className = 'resize-handle';
+                resizeHandle.setAttribute('title', 'Drag to resize column');
+                // Add visible "||" indicator
+                const indicator = document.createElement('span');
+                indicator.textContent = '||';
+                indicator.style.cssText = 'position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: transparent; font-weight: bold; font-size: 12px; pointer-events: none; z-index: 102;';
+                resizeHandle.appendChild(indicator);
+                header.appendChild(resizeHandle);
+                header.style.position = 'relative';
+                
+                // Show indicator on hover
+                resizeHandle.addEventListener('mouseenter', () => {
+                    indicator.style.color = '#007bff';
+                    indicator.style.background = '#ffffff';
+                    indicator.style.padding = '4px 8px';
+                    indicator.style.border = '2px solid #007bff';
+                    indicator.style.borderRadius = '4px';
+                    indicator.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+                    indicator.style.fontSize = '16px';
+                    indicator.style.fontWeight = 'bold';
+                    indicator.style.zIndex = '1000';
+                });
+                resizeHandle.addEventListener('mouseleave', () => {
+                    indicator.style.color = 'transparent';
+                    indicator.style.background = 'transparent';
+                    indicator.style.padding = '0';
+                    indicator.style.border = 'none';
+                });
+
+                let isResizing = false;
+                let startX = 0;
+                let startWidth = 0;
+
+                resizeHandle.addEventListener('mousedown', (e) => {
+                    isResizing = true;
+                    startX = e.pageX;
+                    startWidth = header.offsetWidth;
+                    header.classList.add('resizing');
+                    resizeHandle.style.background = 'rgba(0, 123, 255, 0.3)';
+                    resizeHandle.style.borderRight = '2px solid #007bff';
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isResizing) return;
+                    const diff = e.pageX - startX;
+                    const newWidth = Math.max(100, startWidth + diff); // Minimum width 100px
+                    header.style.width = newWidth + 'px';
+                    // Also update corresponding filter row header
+                    const filterHeader = table.querySelector(`thead tr.task-filter-row th:nth-child(${index + 1})`);
+                    if (filterHeader) {
+                        filterHeader.style.width = newWidth + 'px';
+                    }
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (isResizing) {
+                        isResizing = false;
+                        header.classList.remove('resizing');
+                        resizeHandle.style.background = '';
+                        resizeHandle.style.borderRight = '2px solid transparent';
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                        // Save column widths
+                        saveTaskTableColumnWidths(table);
+                    }
+                });
+            });
+        }
+
+        function saveTaskTableColumnWidths(table) {
+            if (!table) return;
+            const headers = table.querySelectorAll('thead tr:first-child th');
+            const widths = {};
+            headers.forEach((header, index) => {
+                const width = header.style.width || header.offsetWidth + 'px';
+                widths[index] = width;
+            });
+            localStorage.setItem('taskTableColumnWidths', JSON.stringify(widths));
+        }
+
+        function restoreTaskTableColumnWidths(table) {
+            if (!table) return;
+            try {
+                // Force Context column to 2X Customer column width (180px * 2 = 360px)
+                const contextHeader = table.querySelector('thead tr:first-child th.task-context-col');
+                const contextFilterHeader = table.querySelector('thead tr.task-filter-row th.task-context-col');
+                if (contextHeader) {
+                    contextHeader.style.width = '360px';
+                    contextHeader.style.minWidth = '360px';
+                    contextHeader.style.maxWidth = '360px';
+                }
+                if (contextFilterHeader) {
+                    contextFilterHeader.style.width = '360px';
+                    contextFilterHeader.style.minWidth = '360px';
+                    contextFilterHeader.style.maxWidth = '360px';
+                }
+                
+                const savedWidths = localStorage.getItem('taskTableColumnWidths');
+                if (!savedWidths) return;
+                
+                const widths = JSON.parse(savedWidths);
+                const headers = table.querySelectorAll('thead tr:first-child th');
+                const filterHeaders = table.querySelectorAll('thead tr.task-filter-row th');
+                
+                headers.forEach((header, index) => {
+                    // Skip Context column - always keep it at 2X Customer width (360px)
+                    if (header.classList.contains('task-context-col')) {
+                        header.style.width = '360px';
+                        header.style.minWidth = '360px';
+                        header.style.maxWidth = '360px';
+                        return;
+                    }
+                    if (widths[index]) {
+                        header.style.width = widths[index];
+                    }
+                });
+                
+                filterHeaders.forEach((header, index) => {
+                    // Skip Context column - always keep it at 2X Customer width (360px)
+                    if (header.classList.contains('task-context-col')) {
+                        header.style.width = '360px';
+                        header.style.minWidth = '360px';
+                        header.style.maxWidth = '360px';
+                        return;
+                    }
+                    if (widths[index]) {
+                        header.style.width = widths[index];
+                    }
+                });
+            } catch (e) {
+                console.error('Error restoring column widths:', e);
+            }
         }
 
         function handleTaskStatusDrop(event, targetId) {

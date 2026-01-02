@@ -78,6 +78,22 @@ app.config['VERSION'] = VERSION
 app.secret_key = SECRET_KEY
 
 
+def validate_email(email_str):
+    """
+    Validate email address format using regex.
+    
+    Args:
+        email_str (str): Email address to validate
+    
+    Returns:
+        bool: True if valid, False otherwise
+    """
+    if not email_str or not isinstance(email_str, str):
+        return False
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(email_pattern, email_str.strip()))
+
+
 @app.route('/login')
 def login():
     """Login page"""
@@ -101,6 +117,8 @@ def index():
     
     # Get user level from database
     user_level = '1'  # Default level
+    connection = None
+    cursor = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -108,10 +126,13 @@ def index():
         user = cursor.fetchone()
         if user and user['level']:
             user_level = user['level']
-        cursor.close()
-        connection.close()
     except Exception as e:
         print(f"Error getting user level: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
     
     return render_template('index.html', version=app.config['VERSION'], user_email=user_email, user_level=user_level)
 
@@ -122,7 +143,7 @@ def send_verification_code():
     data = request.json or {}
     email = data.get('email', '').strip()
     
-    if not email or '@' not in email:
+    if not email or not validate_email(email):
         return jsonify({'error': 'Valid email address is required'}), 400
     
     # Clean up expired codes
@@ -209,6 +230,8 @@ def verify_verification_code():
         session['user_email'] = email
         
         # Record login in users table
+        connection = None
+        cursor = None
         try:
             connection = get_db_connection()
             cursor = connection.cursor()
@@ -233,11 +256,16 @@ def verify_verification_code():
                 """, (email, now_iso, now_iso))
             
             connection.commit()
-            cursor.close()
-            connection.close()
         except Exception as e:
+            if connection:
+                connection.rollback()
             print(f"Error recording login: {str(e)}")
             # Don't fail login if recording fails
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
         
         return jsonify({'success': True, 'message': 'Login successful'})
     else:
@@ -257,6 +285,8 @@ def get_users():
     if not session.get('logged_in'):
         return jsonify({'error': 'Not authenticated'}), 401
     
+    connection = None
+    cursor = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -328,16 +358,20 @@ def get_users():
         # Convert to list and sort
         users = list(users_dict.values())
         users.sort(key=lambda x: (
-            x['last_login'] if x['last_login'] else '',  # Sort by last_login DESC
-            x['created_at'] if x['created_at'] else ''   # Then by created_at DESC
+            x['last_login'] if x['last_login'] else '',
+            x['created_at'] if x['created_at'] else ''
         ), reverse=True)
-        
-        cursor.close()
-        connection.close()
         
         return jsonify({'users': users})
     except Exception as exc:
+        if connection:
+            connection.rollback()
         return jsonify({'error': f'Database error: {str(exc)}'}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 
 @app.route('/api/users/<int:user_id>', methods=['PUT'])
@@ -356,6 +390,8 @@ def update_user(user_id):
     if not status or status not in ['active', 'suspended']:
         return jsonify({'error': 'Invalid status. Must be active or suspended'}), 400
     
+    connection = None
+    cursor = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -366,15 +402,20 @@ def update_user(user_id):
         """, (level, status, user_id))
         connection.commit()
         updated = cursor.rowcount > 0
-        cursor.close()
-        connection.close()
         
         if not updated:
             return jsonify({'error': 'User not found'}), 404
         
         return jsonify({'success': True, 'message': 'User updated successfully'})
     except Exception as exc:
+        if connection:
+            connection.rollback()
         return jsonify({'error': f'Database error: {str(exc)}'}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 
 @app.route('/api/users/by-email', methods=['PUT'])
@@ -397,6 +438,8 @@ def update_user_by_email():
     if not status or status not in ['active', 'suspended']:
         return jsonify({'error': 'Invalid status. Must be active or suspended'}), 400
     
+    connection = None
+    cursor = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -434,12 +477,16 @@ def update_user_by_email():
             """, (email, level, status, created_at))
         
         connection.commit()
-        cursor.close()
-        connection.close()
-        
         return jsonify({'success': True, 'message': 'User updated successfully'})
     except Exception as exc:
+        if connection:
+            connection.rollback()
         return jsonify({'error': f'Database error: {str(exc)}'}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 
 @app.route('/api/export/customers', methods=['GET'])
@@ -453,6 +500,8 @@ def export_customers():
     if not user_email:
         return jsonify({'error': 'Not authenticated'}), 401
     
+    connection = None
+    cursor = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -463,16 +512,20 @@ def export_customers():
             ORDER BY datetime(created_at) DESC
         """, (user_email,))
         rows = cursor.fetchall()
-        cursor.close()
-        connection.close()
         
         # Generate Excel file using utility function
         output, filename = export_customers_to_excel(rows)
         return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
                         as_attachment=True, download_name=filename)
-    
     except Exception as e:
+        if connection:
+            connection.rollback()
         return jsonify({'error': f'Export error: {str(e)}'}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 
 @app.route('/api/export/tasks', methods=['GET'])
@@ -486,6 +539,8 @@ def export_tasks():
     if not user_email:
         return jsonify({'error': 'Not authenticated'}), 401
     
+    connection = None
+    cursor = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -578,16 +633,20 @@ def export_tasks():
                 ORDER BY datetime(t.created_at) DESC
             """, (user_email,))
         rows = cursor.fetchall()
-        cursor.close()
-        connection.close()
         
         # Generate Excel file using utility function
         output, filename = export_tasks_to_excel(rows)
         return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
                         as_attachment=True, download_name=filename)
-    
     except Exception as e:
+        if connection:
+            connection.rollback()
         return jsonify({'error': f'Export error: {str(e)}'}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 
 @app.route('/api/gmail-auth', methods=['GET'])
@@ -689,6 +748,8 @@ def oauth2callback():
     
     # If session state doesn't match, try to get from database
     if state != session_state:
+        connection = None
+        cursor = None
         try:
             connection = get_db_connection()
             cursor = connection.cursor()
@@ -705,10 +766,13 @@ def oauth2callback():
                 # Delete used state
                 cursor.execute("DELETE FROM oauth_states WHERE state = ?", (state,))
                 connection.commit()
-            cursor.close()
-            connection.close()
         except Exception as e:
             print(f"Error checking OAuth state in database: {e}")
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
     
     # Final validation
     if state != session_state and not client_id:
@@ -1098,8 +1162,10 @@ def customers_endpoint():
         return jsonify({'error': 'Email address is required'}), 400
 
     try:
-        created_by = session.get('user_email', 'eric.brilliant@gmail.com')
-        customer_id = insert_customer(name, full_email, country, website, remark, attachments, company_name, tel, source, address, business_type, rank, created_by)
+        user_email = session.get('user_email')
+        if not user_email:
+            return jsonify({'error': 'Not authenticated'}), 401
+        customer_id = insert_customer(name, full_email, country, website, remark, attachments, company_name, tel, source, address, business_type, rank, user_email)
         return jsonify({
             'id': customer_id,
             'name': name,
@@ -1565,13 +1631,16 @@ def handle_tasks():
         try:
             attachments_json = json.dumps(attachments) if attachments else '[]'
             
+            user_email = session.get('user_email')
+            if not user_email:
+                return jsonify({'error': 'Not authenticated'}), 401
+            
             connection = get_db_connection()
             cursor = connection.cursor()
-            created_by = session.get('user_email', 'eric.brilliant@gmail.com')
             cursor.execute("""
                 INSERT INTO tasks (sequence, customer, email, catalogue, template, attachments, deadline, status, created_at, updated_at, created_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
-            """, (sequence, customer, email, catalogue, template, attachments_json, deadline, status, created_by))
+            """, (sequence, customer, email, catalogue, template, attachments_json, deadline, status, user_email))
             connection.commit()
             task_id = cursor.lastrowid
             cursor.execute("SELECT created_at, updated_at FROM tasks WHERE id = ?", (task_id,))
@@ -1601,6 +1670,8 @@ def handle_tasks():
 def handle_single_task(task_id):
     """Update or delete a task by ID"""
     if request.method == 'DELETE':
+        connection = None
+        cursor = None
         try:
             user_email = session.get('user_email')
             if not user_email:
@@ -1613,15 +1684,25 @@ def handle_single_task(task_id):
             deleted = cursor.rowcount > 0
             cursor.close()
             connection.close()
+            cursor = None
+            connection = None
             
             if deleted:
                 return jsonify({'status': 'deleted', 'id': task_id})
             else:
                 return jsonify({'error': 'Task not found'}), 404
         except Exception as exc:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
             return jsonify({'error': f'Database error: {str(exc)}'}), 500
     
     # PUT - update task
+    connection = None
+    cursor = None
+    connection_check = None
+    cursor_check = None
     try:
         data = request.get_json() or {}
         catalogue = (data.get('catalogue') or '').strip()
@@ -1653,8 +1734,6 @@ def handle_single_task(task_id):
         # Check if task exists and belongs to user
         cursor.execute("SELECT id FROM tasks WHERE id = ? AND created_by = ?", (task_id, user_email))
         if not cursor.fetchone():
-            cursor.close()
-            connection.close()
             return jsonify({'error': 'Task not found or access denied'}), 404
         
         status = data.get('status', '').strip()
@@ -1666,17 +1745,24 @@ def handle_single_task(task_id):
                 cursor_check.execute("SELECT name FROM task_statuses WHERE name = ?", (status,))
                 if not cursor_check.fetchone():
                     status = None  # Don't update if invalid
-                cursor_check.close()
-                connection_check.close()
             except Exception:
                 status = None  # Don't update if table doesn't exist
+            finally:
+                if cursor_check:
+                    cursor_check.close()
+                if connection_check:
+                    connection_check.close()
         
-        update_fields = [
-            ('catalogue', catalogue),
-            ('template', template),
-            ('deadline', deadline)
-        ]
+        # Whitelist of allowed field names to prevent SQL injection
+        ALLOWED_TASK_FIELDS = {'catalogue', 'template', 'deadline', 'email', 'customer', 'status', 'attachments'}
         
+        update_fields = []
+        if catalogue:
+            update_fields.append(('catalogue', catalogue))
+        if template:
+            update_fields.append(('template', template))
+        if deadline:
+            update_fields.append(('deadline', deadline))
         if email:
             update_fields.append(('email', email))
         if customer:
@@ -1686,9 +1772,17 @@ def handle_single_task(task_id):
         if attachments_json is not None:
             update_fields.append(('attachments', attachments_json))
         
+        # Validate all field names against whitelist
+        for field, _ in update_fields:
+            if field not in ALLOWED_TASK_FIELDS:
+                return jsonify({'error': f'Invalid field name: {field}'}), 400
+        
+        if not update_fields:
+            return jsonify({'error': 'No fields to update'}), 400
+        
+        # Build safe parameterized query
         set_clause = ', '.join([f"{field} = ?" for field, _ in update_fields])
-        if set_clause:
-            set_clause = f"{set_clause}, updated_at = datetime('now')"
+        set_clause = f"{set_clause}, updated_at = datetime('now')"
         values = [value for _, value in update_fields]
         values.append(task_id)
         values.append(user_email)
@@ -1698,13 +1792,29 @@ def handle_single_task(task_id):
         updated = cursor.rowcount > 0
         cursor.close()
         connection.close()
+        cursor = None
+        connection = None
         
         if not updated:
             return jsonify({'error': 'Task not found'}), 404
         
         return jsonify({'status': 'updated', 'id': task_id})
     except Exception as exc:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.rollback()
+            connection.close()
+        if cursor_check:
+            cursor_check.close()
+        if connection_check:
+            connection_check.close()
         return jsonify({'error': f'Database error: {str(exc)}'}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 
 @app.route('/api/tasks/by-customer', methods=['GET'])

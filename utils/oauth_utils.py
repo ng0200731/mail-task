@@ -87,12 +87,20 @@ def load_oauth_token(provider: str) -> Optional[Credentials]:
                 if 'invalid_grant' in error_str.lower() or 'token has been expired' in error_str.lower() or 'revoked' in error_str.lower():
                     print(f"OAuth token refresh failed (token expired/revoked): {refresh_error}")
                     # Clear the invalid token from database
-                    connection = get_db_connection()
-                    cursor = connection.cursor()
-                    cursor.execute("DELETE FROM oauth_tokens WHERE provider = ?", (provider,))
-                    connection.commit()
-                    cursor.close()
-                    connection.close()
+                    cleanup_connection = None
+                    cleanup_cursor = None
+                    try:
+                        cleanup_connection = get_db_connection()
+                        cleanup_cursor = cleanup_connection.cursor()
+                        cleanup_cursor.execute("DELETE FROM oauth_tokens WHERE provider = ?", (provider,))
+                        cleanup_connection.commit()
+                    except Exception as cleanup_error:
+                        print(f"Error cleaning up OAuth token: {cleanup_error}")
+                    finally:
+                        if cleanup_cursor:
+                            cleanup_cursor.close()
+                        if cleanup_connection:
+                            cleanup_connection.close()
                 raise refresh_error
         
         return creds

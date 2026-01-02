@@ -14,7 +14,11 @@ def get_db_connection():
     Returns:
         sqlite3.Connection: Database connection with row_factory set to sqlite3.Row
     """
-    connection = sqlite3.connect(str(CUSTOMER_DB_PATH), detect_types=sqlite3.PARSE_DECLTYPES)
+    connection = sqlite3.connect(
+        str(CUSTOMER_DB_PATH), 
+        detect_types=sqlite3.PARSE_DECLTYPES,
+        timeout=30.0  # 30 second timeout for database operations
+    )
     connection.row_factory = sqlite3.Row
     # Ensure UTF-8 encoding for text data
     connection.execute("PRAGMA encoding = 'UTF-8'")
@@ -95,8 +99,8 @@ def initialize_database():
             cursor.execute("ALTER TABLE customers ADD COLUMN rank TEXT")
         except sqlite3.OperationalError:
             pass  # Column already exists
-        # Update existing records to set created_by
-        cursor.execute("UPDATE customers SET created_by = 'eric.brilliant@gmail.com' WHERE created_by IS NULL")
+        # Note: Existing records with NULL created_by will remain NULL
+        # New records should always have created_by set
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS emails (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,8 +138,8 @@ def initialize_database():
                 cursor.execute("ALTER TABLE emails ADD COLUMN created_by TEXT")
             except sqlite3.OperationalError:
                 pass  # Column already exists
-        # Update existing records to set created_by
-        cursor.execute("UPDATE emails SET created_by = 'eric.brilliant@gmail.com' WHERE created_by IS NULL")
+        # Note: Existing records with NULL created_by will remain NULL
+        # New records should always have created_by set
         
         # OAuth tokens table for Gmail API
         cursor.execute("""
@@ -222,8 +226,8 @@ def initialize_database():
         if 'status' not in task_columns:
             cursor.execute("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'open'")
             cursor.execute("UPDATE tasks SET status = 'open' WHERE status IS NULL")
-        # Update existing records to set created_by
-        cursor.execute("UPDATE tasks SET created_by = 'eric.brilliant@gmail.com' WHERE created_by IS NULL")
+        # Note: Existing records with NULL created_by will remain NULL
+        # New records should always have created_by set
         # Countries table for dropdown options
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS countries (
@@ -298,6 +302,20 @@ def initialize_database():
             """, default_ranks)
             connection.commit()  # Commit default ranks insertion
         
+        # Verification codes table (persistent)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS verification_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                code TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(email)
+            )
+        """)
+        # Clean up expired verification codes (older than now)
+        cursor.execute("DELETE FROM verification_codes WHERE datetime(expires_at) < datetime('now')")
+
         # Task statuses table for dropdown options
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS task_statuses (

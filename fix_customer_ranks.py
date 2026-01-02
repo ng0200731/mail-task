@@ -81,6 +81,3 @@ def fix_customer_ranks():
 if __name__ == '__main__':
     fix_customer_ranks()
 
-
-
-

@@ -107,7 +107,8 @@
             background-color: #ffffff;
             padding: 20px;
             overflow-y: auto;
-            overflow-x: hidden;
+            /* Keep main area from clipping horizontal scrollbars inside sections like Task List */
+            overflow-x: visible;
             position: relative;
         }
 
@@ -192,6 +193,11 @@
             overflow-x: hidden;
             width: 100%;
             max-width: 100%;
+        }
+
+        /* Task List: allow its own horizontal scrollbar to be visible */
+        .task-table-scroll {
+            overflow-x: auto;
         }
 
         .email-item {
@@ -1065,7 +1071,7 @@
         }
 
         .task-template-cell {
-            max-width: 300px;
+            /* Remove max-width constraint - let task-context-col min-width control it */
             max-height: 150px;
             overflow: auto;
             white-space: normal;
@@ -1452,6 +1458,73 @@
             opacity: 1 !important;
         }
 
+        /* Task list horizontal scrolling (Task List only) */
+        .task-table-scroll {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto !important;
+            overflow-y: auto !important; /* Allow vertical scroll if table is tall */
+            -webkit-overflow-scrolling: touch;
+            border: 2px solid #000000;
+            background: #ffffff;
+            /* Make container fit within viewport so horizontal scrollbar is always visible at screen bottom */
+            max-height: calc(100vh - 200px); /* Account for header, padding, filters, export button */
+            /* Force scrollbar to always be visible on Windows Chrome/Edge */
+            scrollbar-width: auto; /* Firefox */
+            scrollbar-gutter: stable; /* Reserve space for scrollbar */
+        }
+
+        /* Let Task List auto-size and be wider than viewport (so you can scroll left/right) */
+        .task-table {
+            width: max-content !important;
+            min-width: 100%;
+            table-layout: auto;
+            /* Ensure table is wider than container to trigger scrollbar */
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 0;
+        }
+        
+        /* Ensure the table wrapper takes full height */
+        .task-table-scroll > table {
+            display: block;
+            max-height: 100%;
+        }
+
+        .task-table th,
+        .task-table td {
+            white-space: nowrap;
+            min-width: 140px;
+            padding: 8px 12px;
+        }
+
+        /* Make Context ~3x wider - this will make table wider than viewport */
+        .task-table th.task-context-col,
+        .task-table td.task-context-col {
+            min-width: 600px !important; /* Increased to ensure scrollbar appears */
+            white-space: normal;
+            word-wrap: break-word;
+        }
+
+        /* Force scrollbars to be visible on Windows Chrome/Edge */
+        .task-table-scroll::-webkit-scrollbar {
+            height: 17px !important;
+            display: block !important;
+            -webkit-appearance: none;
+        }
+        .task-table-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border: 1px solid #000000;
+        }
+        .task-table-scroll::-webkit-scrollbar-thumb {
+            background: #000000 !important;
+            border: 1px solid #000000;
+            border-radius: 0;
+        }
+        .task-table-scroll::-webkit-scrollbar-thumb:hover {
+            background: #333333;
+        }
+
         /* Sticky header + filter row for task list */
         .task-table thead th {
             position: sticky;
@@ -1502,20 +1575,20 @@
         .task-table tbody td:last-child {
             position: sticky;
             right: 0;
-            background-color: #ffc0cb !important;
+            background-color: #ffffff;
             z-index: 3;
             box-shadow: -2px 0 4px rgba(0,0,0,0.1);
             border-left: 3px solid #000000;
         }
 
         .task-table thead tr:nth-child(1) th:last-child {
-            background-color: #ffc0cb !important;
+            background-color: #f0f0f0;
             z-index: 4;
             border-left: 3px solid #000000;
         }
 
         .task-table thead tr:nth-child(2) th:last-child {
-            background-color: #ffc0cb !important;
+            background-color: #ffffff !important;
             z-index: 4;
             border-left: 3px solid #000000;
         }
@@ -9509,7 +9582,6 @@
                 `id="task-row-${task.id}"`,
                 `data-task-id="${task.id}"`,
                 `data-sequence="${escapeHtml(task.sequence || '')}"`,
-                `data-business_type="${escapeHtml(businessType)}"`,
                 `data-customer="${escapeHtml(task.customer || '')}"`,
                 `data-company_name="${escapeHtml(companyName)}"`,
                 `data-email="${escapeHtml(task.email || '')}"`,
@@ -9535,12 +9607,10 @@
                 return `
                     <tr ${rowAttributes}>
                         <td>${escapeHtml(task.sequence || '')}</td>
-                        <td>${escapeHtml(businessType)}</td>
-                        <td>${escapeHtml(companyName)}</td>
                         <td>${escapeHtml(task.customer || '')}</td>
                         <td>${escapeHtml(task.email || '')}</td>
                         <td>${escapeHtml(task.catalogue || '')}</td>
-                        <td class="task-template-cell" title="${escapeHtml(templatePlain)}">
+                        <td class="task-template-cell task-context-col" title="${escapeHtml(templatePlain)}">
                             ${templateDisplay}
                         </td>
                         <td>${escapeHtml(task.status || 'open')}</td>
@@ -9580,8 +9650,6 @@
             return `
                 <tr class="task-editing-row" ${rowAttributes}>
                     <td>${escapeHtml(task.sequence || '')}</td>
-                    <td>${escapeHtml(businessType)}</td>
-                    <td><input type="text" class="inline-task-input" data-field="company_name" value="${escapeHtml(companyName)}" readonly></td>
                     <td><input type="text" class="inline-task-input" data-field="customer" value="${escapeHtml(task.customer || '')}"></td>
                     <td><input type="text" class="inline-task-input" data-field="email" value="${escapeHtml(task.email || '')}"></td>
                     <td>
@@ -9589,7 +9657,7 @@
                             ${typeOptions}
                         </select>
                     </td>
-                    <td>
+                    <td class="task-context-col">
                         <textarea class="inline-task-template-input" data-field="template" placeholder="Enter template...">${escapeTextareaContent(task.template || '')}</textarea>
                     </td>
                     <td>
@@ -9653,16 +9721,15 @@
                                     <strong>Filters:</strong> type to filter rows
                                 </div>
                                 ${exportButton}
-                                <table class="customer-table task-table">
+                                <div class="task-table-scroll">
+                                    <table class="customer-table task-table">
                                     <thead>
                                         <tr>
                                             <th>Sequence</th>
-                                            <th style="min-width: 170px;">Business Type</th>
-                                            <th style="min-width: 180px;">Company Name</th>
                                             <th style="min-width: 180px;">Customer</th>
                                             <th>Email</th>
                                             <th>Type</th>
-                                            <th>Context</th>
+                                            <th class="task-context-col">Context</th>
                                             <th>Status</th>
                                             <th>Deadline</th>
                                             <th>Created At</th>
@@ -9674,8 +9741,6 @@
                                         </tr>
                                         <tr class="task-filter-row">
                                             <th><input type="text" class="customer-filter-input task-filter-input" data-field="sequence" placeholder="Filter sequence"></th>
-                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="business_type" placeholder="Filter business type"></th>
-                                            <th><input type="text" class="customer-filter-input task-filter-input" data-field="company_name" placeholder="Filter company name"></th>
                                             <th><input type="text" class="customer-filter-input task-filter-input" data-field="customer" placeholder="Filter customer"></th>
                                             <th><input type="text" class="customer-filter-input task-filter-input" data-field="email" placeholder="Filter email"></th>
                                             <th><input type="text" class="customer-filter-input task-filter-input" data-field="catalogue" placeholder="Filter type"></th>
@@ -9694,6 +9759,7 @@
                                         ${tasks.map(task => renderTaskRow(task)).join('')}
                                     </tbody>
                                 </table>
+                                </div>
                             `;
                             container.innerHTML = tableHtml;
 

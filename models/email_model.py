@@ -22,7 +22,9 @@ def save_emails(provider: str, emails: list[dict], created_by: str = None):
         return
     
     if created_by is None:
-        created_by = session.get('user_email', 'eric.brilliant@gmail.com')
+        created_by = session.get('user_email')
+        if not created_by:
+            raise ValueError("User email is required. User must be authenticated.")
     
     connection = get_db_connection()
     cursor = connection.cursor()

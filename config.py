@@ -9,7 +9,9 @@ from datetime import timedelta
 # Load environment variables from .env file if it exists
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    # Always load .env from the project root (same folder as this config.py)
+    env_path = Path(__file__).resolve().parent / '.env'
+    load_dotenv(dotenv_path=env_path, override=True)
 except ImportError:
     pass  # python-dotenv not installed, use system environment variables only
 

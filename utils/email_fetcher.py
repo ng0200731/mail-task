@@ -301,12 +301,28 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
                 mail.starttls(context)
         
         mail.login(username, password)
-        mail.select(folder)
+
+        # Select folder and validate result
+        sel_status, sel_data = mail.select(folder)
+        if sel_status != 'OK':
+            try:
+                mail.logout()
+            except Exception:
+                pass
+            return {'error': f"IMAP select folder failed: {folder} ({sel_status}) {sel_data}"}
         
         # Search for recent emails - fetch all emails in date range (with and without attachments)
         oldest_date = min(allowed_dates)
         since_clause = f'(SINCE { _imap_date(oldest_date) })'
         status, messages = mail.search(None, since_clause)
+
+        # Some servers (esp. enterprise/locale edge cases) respond ERR.PARAM for SINCE.
+        # Fallback: search ALL and filter locally by date.
+        if status != 'OK' or (messages and isinstance(messages[0], (bytes, bytearray)) and b'ERR.PARAM' in messages[0]):
+            status_all, messages_all = mail.search(None, 'ALL')
+            status = status_all
+            messages = messages_all
+
         email_ids = []
         if status == 'OK' and messages and len(messages) > 0:
             email_ids = [seq_id for seq_id in messages[0].split() if seq_id and seq_id.strip()]
@@ -504,7 +520,11 @@ def fetch_emails(imap_server, port, username, password, use_ssl=True, use_tls=Fa
         mail.logout()
         
     except Exception as e:
-        print(f"Error fetching emails: {str(e)}")
+        # Avoid UnicodeEncodeError on Windows terminals with non-UTF8 codepages
+        try:
+            print(f"Error fetching emails: {str(e)}")
+        except Exception:
+            pass
         return {'error': str(e)}
     
     return {'emails': emails, 'count': len(emails)}

@@ -1245,8 +1245,9 @@
         
         /* Filter row - ensure it stays in thead and doesn't overlap tbody */
         .customer-table thead tr:nth-child(2) {
-            position: relative;
-            z-index: 1;
+            position: sticky;
+            top: 40px; /* height of header row */
+            z-index: 9;
             display: table-row;
         }
         
@@ -1254,8 +1255,9 @@
             color: #000000 !important;
             background-color: #ffffff !important;
             padding: 5px !important;
-            position: relative;
-            z-index: 1;
+            position: sticky;
+            top: 40px; /* height of header row */
+            z-index: 9;
             overflow: hidden;
             border-top: 1px solid #000000;
         }
@@ -1358,8 +1360,10 @@
         
         /* Ensure filter inputs are above resizers */
         .customer-table thead tr:nth-child(2) th {
-            position: relative;
-            z-index: 2;
+            position: sticky;
+            top: 40px; /* height of header row */
+            background-color: #ffffff !important;
+            z-index: 9;
         }
         
         .customer-table thead tr:nth-child(2) th input {
@@ -3736,7 +3740,7 @@
             }
             // Load all stored emails for this provider (no time limit). The backend
             // already filters per logged-in user.
-            return fetch(`/api/emails?provider=${encodeURIComponent(provider)}`)
+            return fetch(`/api/emails?provider=${encodeURIComponent(provider)}&limit=200&offset=0`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
@@ -7594,7 +7598,7 @@
                                     <span class="email-col-resizer" data-column="company"></span>
                                 </th>
                                 <th style="width: 50px; min-width: 50px;" data-column="rank">
-                                    Rank
+                                    <span style="white-space: nowrap;">Rank</span>
                                     <span class="email-col-resizer" data-column="rank"></span>
                                 </th>
                                 <th style="width: ${layout.name}%; min-width: 120px;" data-column="name">
@@ -7882,13 +7886,32 @@
             }
         }
 
-        function openEmailModal(index) {
+        async function openEmailModal(index) {
             if (Number.isNaN(index)) {
                 return;
             }
-            const email = currentEmails[index];
+            let email = currentEmails[index];
             if (!email) {
                 return;
+            }
+
+            // Lazily fetch full email body/attachments if not present (speed up local list loading)
+            if ((!email.html_body && !email.plain_body) && currentProvider && email.id) {
+                try {
+                    const resp = await fetch(`/api/email?provider=${encodeURIComponent(currentProvider)}&id=${encodeURIComponent(email.id)}`);
+                    const data = await resp.json();
+                    if (resp.ok && !data.error) {
+                        // merge into cached object so next open is instant
+                        email = { ...email, ...data };
+                        currentEmails[index] = email;
+                        const allIdx = (allEmails || []).findIndex(e => e && e.id === email.id);
+                        if (allIdx >= 0) {
+                            allEmails[allIdx] = { ...allEmails[allIdx], ...data };
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to load full email content:', e);
+                }
             }
 
             emailModalSubject.textContent = email.subject || 'No Subject';

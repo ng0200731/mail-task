@@ -1302,6 +1302,14 @@ def handle_emails():
             except (TypeError, ValueError):
                 return jsonify({'error': 'Invalid days parameter'}), 400
 
+        # Pagination parameters
+        try:
+            limit = int(request.args.get('limit', 200))
+            offset = int(request.args.get('offset', 0))
+        except (TypeError, ValueError):
+            limit = 200
+            offset = 0
+
         # Build SQL query with optional date filter
         user_email = session.get('user_email')
         if not user_email:
@@ -1309,8 +1317,10 @@ def handle_emails():
         
         connection = get_db_connection()
         cursor = connection.cursor()
+        # For list view performance, return summary fields by default.
+        # Clients can request full bodies via /api/email (single email endpoint).
         query = """
-            SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, plain_body, html_body, sequence, attachments, fetched_at, created_by
+            SELECT provider, email_uid, subject, from_addr, to_addr, date, preview, sequence, attachments, fetched_at, created_by
             FROM emails
             WHERE provider = ? AND created_by = ?
         """
@@ -1319,6 +1329,8 @@ def handle_emails():
             query += " AND datetime(fetched_at) >= datetime('now', ?)"
             params.append(f'-{days} days')
         query += " ORDER BY datetime(date) DESC, datetime(fetched_at) DESC"
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
         cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
         cursor.close()
@@ -1328,9 +1340,11 @@ def handle_emails():
         for row in rows:
             attachments = []
             try:
-                attachments = json.loads(row[10] or '[]')
+                attachments = json.loads(row[8] or '[]')
             except (TypeError, ValueError):
                 attachments = []
+
+            # In list view we only return light fields; full bodies are fetched on-demand
             emails.append({
                 'id': row[1],
                 'subject': row[2],
@@ -1338,15 +1352,14 @@ def handle_emails():
                 'to': row[4],
                 'date': row[5],
                 'preview': row[6],
-                'plain_body': row[7],
-                'html_body': row[8],
-                'sequence': row[9],
+                'sequence': row[7],
                 'attachments': attachments,
-                'fetched_at': row[11],
-                'created_by': row[12] if len(row) > 12 else None
+                'fetched_at': row[9],
+                'created_by': row[10] if len(row) > 10 else None,
+                'has_body': False
             })
 
-        return jsonify({'provider': provider, 'emails': emails})
+        return jsonify({'provider': provider, 'emails': emails, 'limit': limit, 'offset': offset, 'returned': len(emails)})
     
     elif request.method == 'POST':
         data = request.json or {}
@@ -1361,6 +1374,61 @@ def handle_emails():
 
         save_emails(provider, emails)
         return jsonify({'status': 'saved', 'count': len(emails)})
+
+
+@app.route('/api/email', methods=['GET'])
+def get_email_detail():
+    """Get one email with full body/attachments by provider + id (email_uid)."""
+    provider = (request.args.get('provider') or '').strip().lower()
+    email_uid = (request.args.get('id') or '').strip()
+    if not provider or not email_uid:
+        return jsonify({'error': 'provider and id are required'}), 400
+
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT provider, email_uid, subject, from_addr, to_addr, date, preview,
+               plain_body, html_body, sequence, attachments, fetched_at, created_by
+        FROM emails
+        WHERE provider = ? AND email_uid = ? AND created_by = ?
+        LIMIT 1
+        """,
+        (provider, email_uid, user_email)
+    )
+    row = cursor.fetchone()
+    cursor.close()
+    connection.close()
+
+    if not row:
+        return jsonify({'error': 'Email not found'}), 404
+
+    attachments = []
+    try:
+        attachments = json.loads(row[10] or '[]')
+    except (TypeError, ValueError):
+        attachments = []
+
+    return jsonify({
+        'provider': row[0],
+        'id': row[1],
+        'subject': row[2],
+        'from': row[3],
+        'to': row[4],
+        'date': row[5],
+        'preview': row[6],
+        'plain_body': row[7],
+        'html_body': row[8],
+        'sequence': row[9],
+        'attachments': attachments,
+        'fetched_at': row[11],
+        'created_by': row[12] if len(row) > 12 else None,
+        'has_body': True
+    })
 
 
 @app.route('/api/emails/by-customer', methods=['GET'])

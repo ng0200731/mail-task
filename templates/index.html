@@ -7760,25 +7760,6 @@
                                 openTaskModal(index);
                             });
                         }
-                // In LCF table view: ONLY the Content column (6th column) click opens Task modal.
-                // Other columns do nothing.
-                document.querySelectorAll('.email-row').forEach(row => {
-                    row.addEventListener('click', (evt) => {
-                        // If user clicked "Read more", handle below
-                        if (evt.target && evt.target.classList.contains('email-read-more')) {
-                            return;
-                        }
-                        const cell = evt.target && evt.target.closest ? evt.target.closest('td') : null;
-                        if (!cell) return;
-                        const cellIndex = cell.cellIndex; // 0-based
-                        // Column order: Date(0) Company(1) Rank(2) Name(3) Title/Subject(4) Content(5) Attachments(6)
-                        const CONTENT_COL_INDEX = 5;
-                        if (cellIndex !== CONTENT_COL_INDEX) {
-                            return;
-                        }
-                        const index = parseInt(row.getAttribute('data-index'), 10);
-                        openTaskModal(index);
-
                     });
                 } else {
                     // Other providers: entire row is clickable

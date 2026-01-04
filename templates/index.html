@@ -4405,6 +4405,7 @@
         
         // Ensure showReceiveMail is globally accessible
         window.showReceiveMail = showReceiveMail;
+        window.showTaskList = showTaskList;
 
         // Declare taskFormPasteHandler before it's used
         let taskFormPasteHandler = null;
@@ -4467,8 +4468,12 @@
         
         // Ensure showSendBox is globally accessible
         window.showSendBox = showSendBox;
+        // Ensure showCreateCustomer is globally accessible
+        window.showCreateCustomer = showCreateCustomer;
+        window.showTaskList = showTaskList;
 
         function showCreateCustomer(event) {
+            
             cleanupTaskFormPasteHandler();
             document.getElementById('receive-mail-content').classList.add('hidden');
             document.getElementById('send-mail-content').classList.add('hidden');
@@ -9558,6 +9563,7 @@
         }
 
         function showTaskList(event) {
+            
             document.getElementById('receive-mail-content').classList.add('hidden');
             document.getElementById('send-mail-content').classList.add('hidden');
             document.getElementById('send-box-content').classList.add('hidden');

@@ -7741,7 +7741,7 @@
             }
 
             if (currentEmailViewMode === 'table') {
-<<<<<<< HEAD
+
                 // For LCF and Send Box providers: only Content column click opens task modal
                 // For other providers: entire row click opens task modal
                 if (provider === 'lcf' || provider === 'sendbox') {
@@ -7760,7 +7760,6 @@
                                 openTaskModal(index);
                             });
                         }
-=======
                 // In LCF table view: ONLY the Content column (6th column) click opens Task modal.
                 // Other columns do nothing.
                 document.querySelectorAll('.email-row').forEach(row => {
@@ -7779,7 +7778,7 @@
                         }
                         const index = parseInt(row.getAttribute('data-index'), 10);
                         openTaskModal(index);
->>>>>>> 24d56de ( only content can be clickable)
+
                     });
                 } else {
                     // Other providers: entire row is clickable

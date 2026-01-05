@@ -1911,7 +1911,6 @@
             {% if user_level == '2' or user_level == '3' %}
             <div id="welcome-content">
                 <h2 style="margin-bottom:1rem;">Welcome to Email-ERP</h2>
-                <p>Select a feature on the left to begin.</p>
             </div>
             <div id="receive-mail-content" class="hidden">
                 <button class="form-button" onclick="fetchGmailEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch Gmail</button>
@@ -4345,8 +4344,9 @@
                 const createCustomerBtn = document.querySelector('.menu-button[onclick="showCreateCustomer()"]');
                 if (createCustomerBtn) createCustomerBtn.classList.add('active');
             } else {
-                // Level 2/3: Show Receive Mail by default
-                document.getElementById('receive-mail-content').classList.remove('hidden');
+                // Level 2/3: Show Welcome page by default
+                document.getElementById('welcome-content').classList.remove('hidden');
+                document.getElementById('receive-mail-content').classList.add('hidden');
                 document.getElementById('create-customer-content').classList.add('hidden');
                 document.getElementById('send-mail-content').classList.add('hidden');
                 document.getElementById('task-content').classList.add('hidden');
@@ -4354,7 +4354,7 @@
                 document.getElementById('settings-content').classList.add('hidden');
                 document.getElementById('dropdown-list-content').classList.add('hidden');
                 document.getElementById('security-content').classList.add('hidden');
-                document.getElementById('content-title').textContent = 'Receive Mail';
+                document.getElementById('content-title').textContent = 'Welcome';
             }
             
             initializeProfile1();
@@ -4366,7 +4366,8 @@
             setupRemarkPlaceholder();
             await loadCustomers(false);
             await saveYesterdayEmailsToSQLite();
-            await loadCachedEmailsOnStartup();
+            // Don't load emails on startup - only when user navigates to Receive Mail
+            // await loadCachedEmailsOnStartup();
             populateEmailLayoutInputs();
             // Load countries for dropdown
             loadCountries();
@@ -4459,6 +4460,10 @@
                 event.target.classList.add('active');
             }
             const emailList = document.getElementById('email-list');
+            // Load emails when navigating to Receive Mail
+            if (emailList && emailList.dataset.cached !== 'true') {
+                loadCachedEmailsOnStartup();
+            }
             if (currentProvider && emailList) {
                 const cached = emailList.dataset && emailList.dataset.cached === 'true';
                 updateContentTitle(currentProvider, cached);

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Git pre-commit hook to run local safety checks.
+
+scripts/check-conflicts.sh || exit 1
+
+# TODO: Add linters / tests here
+
+exit 0
+
+

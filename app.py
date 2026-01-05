@@ -2718,25 +2718,28 @@ if __name__ == '__main__':
     except Exception:
         local_ip = "localhost"
     
-    # Try ports starting from configured port, increment until one works
-    start_port = port
-    max_attempts = 10
+    # Preference-ordered list of candidate ports
+    candidate_ports = []
+    # 1) Port set in config / env
+    if port:
+        candidate_ports.append(port)
+    # 2) Common web-dev ports in descending preference
+    candidate_ports.extend([8000, 8080, 5000, 5050, 3000])
+    # remove duplicates while preserving order
+    seen = set()
+    candidate_ports = [p for p in candidate_ports if not (p in seen or seen.add(p))]
     
-    for attempt in range(max_attempts):
-        try_port = start_port + attempt
+    for try_port in candidate_ports:
         try:
-            if attempt > 0:
-                print(f"Port {start_port + attempt - 1} unavailable, trying port {try_port}...")
-            else:
-                print(f"Starting Flask server on port {try_port}...")
+            print(f"Starting Flask server on port {try_port}...")
             print(f"  Local access: http://127.0.0.1:{try_port}")
             print(f"  Network access: http://{local_ip}:{try_port}")
             app.run(debug=True, host='0.0.0.0', port=try_port)
             break  # Success, exit loop
-        except OSError as e:
-            if attempt < max_attempts - 1:
-                continue  # Try next port
-            else:
-                print(f"❌ Failed to start server after trying ports {start_port} to {try_port}")
-                raise
+        except OSError:
+            print(f"Port {try_port} unavailable, trying next candidate…")
+            continue
+    else:
+        print("❌ Failed to start server on any candidate ports.")
+        raise SystemExit(1)
 

@@ -1909,7 +1909,7 @@
                 {% endif %}
             </div>
             {% if user_level == '2' or user_level == '3' %}
-            <div id="receive-mail-content">
+            <div id="receive-mail-content" class="hidden">
                 <button class="form-button" onclick="fetchGmailEmails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch Gmail</button>
                 <button class="form-button" onclick="checkGmailStatus()" style="margin-bottom: 20px; margin-right: 10px; font-size: 12px;">Check Gmail Status</button>
                 <button class="form-button" onclick="fetch163Emails()" style="margin-bottom: 20px; margin-right: 10px;">Fetch 163.com</button>
@@ -4476,6 +4476,7 @@
         }
 
         function showSend(event) {
+            addOrActivateTab('send-mail','Send');
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -4503,6 +4504,7 @@
         }
 
         function showSendBox(event) {
+            addOrActivateTab('send-box','Send Box');
             cleanupTaskFormPasteHandler();
             document.getElementById('receive-mail-content').classList.add('hidden');
             document.getElementById('send-mail-content').classList.add('hidden');
@@ -4559,6 +4561,7 @@
         }
 
         function showTask(event) {
+            addOrActivateTab('task','Task');
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -5118,6 +5121,7 @@
         }
 
         function showDropdownList(event) {
+            addOrActivateTab('dropdown-list','Dropdown List');
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -5171,6 +5175,7 @@
         }
 
         function showSettings(event) {
+            addOrActivateTab('settings','Settings');
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -5209,6 +5214,7 @@
         }
 
         function showSecurity(event) {
+            addOrActivateTab('security','Security');
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -9602,6 +9608,7 @@
         }
 
         function showTaskList(event) {
+            addOrActivateTab('task-list','Task List');
             
             document.getElementById('receive-mail-content').classList.add('hidden');
             document.getElementById('send-mail-content').classList.add('hidden');

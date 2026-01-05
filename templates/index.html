@@ -34,6 +34,28 @@
         })();
     </script>
     <style>
+        /* === Top Tab bar styles === */
+        .top-tabs {
+            display: flex;
+            gap: 2px;
+            background: #f7f7f7;
+            border-bottom: 2px solid #000000;
+            padding: 4px 6px;
+            user-select: none;
+        }
+        .tab-button {
+            padding: 6px 14px;
+            border: 1px solid #000000;
+            background: #ffffff;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        .tab-button.active {
+            background: #000000;
+            color: #ffffff;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -1818,6 +1840,7 @@
     </style>
 </head>
 <body>
+    <div id="top-tabs" class="top-tabs"></div>
     <div class="container">
         <div class="left-menu">
             {% if user_level == '2' or user_level == '3' %}
@@ -4377,7 +4400,40 @@
             }
         };
 
+        // ===== Tab helper functions =====
+        function addOrActivateTab(tabId, title){
+            const bar = document.getElementById('top-tabs');
+            if(!bar) return;
+            let tab = bar.querySelector(`[data-tab="${tabId}"]`);
+            if(!tab){
+                tab = document.createElement('button');
+                tab.className = 'tab-button';
+                tab.dataset.tab = tabId;
+                tab.textContent = title;
+                tab.addEventListener('click', () => switchTab(tabId));
+                bar.appendChild(tab);
+            }
+            switchTab(tabId);
+        }
+        function switchTab(tabId){
+            document.querySelectorAll('#top-tabs .tab-button').forEach(t => {
+                t.classList.toggle('active', t.dataset.tab === tabId);
+            });
+            const sections = [
+                'receive-mail','send-mail','send-box','create-customer',
+                'task','task-list','settings','dropdown-list','security'
+            ];
+            sections.forEach(id => {
+                const el = document.getElementById(`${id}-content`);
+                if(el){
+                    el.classList.toggle('hidden', id !== tabId);
+                }
+            });
+        }
+
+        // ===== Main view functions =====
         function showReceiveMail(event) {
+            addOrActivateTab('receive-mail','Receive Mail');
             const userLevel = '{{ user_level }}';
             if (userLevel !== '2' && userLevel !== '3') {
                 alert('Access denied. This feature requires level 2 or higher.');
@@ -4473,6 +4529,7 @@
         window.showTaskList = showTaskList;
 
         function showCreateCustomer(event) {
+            addOrActivateTab('create-customer','Create Customer');
             
             cleanupTaskFormPasteHandler();
             document.getElementById('receive-mail-content').classList.add('hidden');

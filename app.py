@@ -986,6 +986,42 @@ def fetch_lcf():
     return jsonify(result)
 
 
+@app.route('/api/fetch-rln', methods=['POST'])
+def fetch_rln():
+    """Fetch emails from RLN account - requires level 2+"""
+    has_access, error_response, status_code = check_user_level(2)
+    if not has_access:
+        return error_response, status_code
+
+    data = request.json or {}
+    limit = 0  # fetch today's emails, unlimited
+
+    config = {
+        'imap_server': data.get('imap_server', RLN_CONFIG['imap_server']),
+        'port': data.get('port', RLN_CONFIG['port']),
+        'username': data.get('username', RLN_CONFIG['username']),
+        'password': data.get('password', RLN_CONFIG['password']),
+        'use_ssl': data.get('use_ssl', RLN_CONFIG['use_ssl']),
+        'use_tls': data.get('use_tls', RLN_CONFIG['use_tls'])
+    }
+
+    result = fetch_emails(
+        config['imap_server'],
+        config['port'],
+        config['username'],
+        config['password'],
+        config['use_ssl'],
+        config['use_tls'],
+        limit,
+        days_back=0
+    )
+    try:
+        save_emails('rln', result.get('emails', []))
+    except Exception as exc:
+        print(f"Error saving RLN emails: {exc}")
+    return jsonify(result)
+
+
 @app.route('/api/fetch-sendbox', methods=['POST'])
 def fetch_sendbox():
     """Fetch sent emails from LCF account Send Items folder - visible to all users"""

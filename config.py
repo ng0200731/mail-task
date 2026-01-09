@@ -75,6 +75,16 @@ QQ_CONFIG = {
     'password': ''
 }
 
+# RLN mailbox (Long River Label)
+RLN_CONFIG = {
+    'imap_server': 'imap.bbmail.com.hk',
+    'port': 110,
+    'use_ssl': False,
+    'use_tls': False,
+    'username': 'm.yau.01@longriverlabel.com',
+    'password': 'Lr#3151717'
+}
+
 # ============================================================================
 # SMTP Configurations
 # ============================================================================

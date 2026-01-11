@@ -113,6 +113,7 @@ def index():
     if not user_email:
         user_email = 'eric.brilliant@gmail.com'
         session['user_email'] = user_email
+        session['logged_in'] = True
     
     # No permission system: always show everything
     user_level = '3'

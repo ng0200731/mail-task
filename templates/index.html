@@ -4462,7 +4462,7 @@
             }
             const emailList = document.getElementById('email-list');
             // Load emails when navigating to Receive Mail
-            if (emailList && emailList.dataset.cached !== 'true') {
+            if (false && emailList && emailList.dataset.cached !== 'true') {
                 loadCachedEmailsOnStartup();
             }
             if (currentProvider && emailList) {

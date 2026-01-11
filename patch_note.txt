@@ -1,0 +1,4 @@
+We'll add JS function fetchRLNEmails in index.html near other functions.
+
+
+

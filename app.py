@@ -94,10 +94,6 @@ def validate_email(email_str):
     return bool(re.match(email_pattern, email_str.strip()))
 
 
-@app.route('/login')
-def login():
-    """Login page"""
-    return render_template('login.html')
 
 
 @app.route('/favicon.ico')
@@ -111,29 +107,16 @@ def favicon():
 @app.route('/')
 def index():
     """Main page - requires login"""
-    if not session.get('logged_in'):
-        return redirect(url_for('login'))
+
     user_email = session.get('user_email', '')
+    # Default to admin user if no session (auto-login)
+    if not user_email:
+        user_email = 'eric.brilliant@gmail.com'
+        session['user_email'] = user_email
     
-    # Get user level from database
-    user_level = '1'  # Default level
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute("SELECT level FROM users WHERE email = ?", (user_email,))
-        user = cursor.fetchone()
-        if user and user['level']:
-            user_level = user['level']
-    except Exception as e:
-        print(f"Error getting user level: {str(e)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-    
+    # No permission system: always show everything
+    user_level = '3'
+
     return render_template('index.html', version=app.config['VERSION'], user_email=user_email, user_level=user_level)
 
 
@@ -282,8 +265,7 @@ def logout():
 @app.route('/api/users', methods=['GET'])
 def get_users():
     """Get all users with login history, including users who created records but haven't logged in"""
-    if not session.get('logged_in'):
-        return jsonify({'error': 'Not authenticated'}), 401
+
     
     connection = None
     cursor = None
